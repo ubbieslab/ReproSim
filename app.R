@@ -43,7 +43,35 @@ ui <- fluidPage(
 
       
       div(width = "30%", class = "params-container",
-          bsCollapse(id = "params",  multiple = TRUE, open = c(1,9),
+          div(id = "params", class = "params-stack",
+              div(class = "simulation-action-bar",
+                  span(actionButton("resetParams", "Reset", class = "btn-default"), class = "action-button-half"),
+                  span(actionButton("runSim", "Run Simulation", class = "btn-primary"), class = "action-button-half"),
+                  div(class = "report-button-row",
+                      downloadButton("report_html", "Generate Report", class = "btn-info")
+                  )
+              ),
+              div(class = "param-block block-vignettes",
+                  h4("Vignettes", class = "block-header"),
+                  bsCollapse(id = "paramsVignettes",  multiple = TRUE, open = c(11),
+
+# * 1.2 Vignettes -----------------------------------------------------------
+
+
+                     bsCollapsePanel(title = "Vignettes", value=11, #id="vignettePanel",
+                                     span(
+                                       selectInput("study", "Study",
+                                                   list("Select Study" = "",
+                                                        "Nilsson IUD"="Nilsson_IUD",
+                                                        "Nilsson Oral"="Nilsson_Oral",
+                                                        "User Defined"="User_Defined"), selected = "Nilsson_IUD")
+                                     )
+                                     )
+                  )
+              ),
+              div(class = "param-block block-dosing",
+                  h4("Dosing", class = "block-header"),
+                  bsCollapse(id = "paramsDosing",  multiple = TRUE, open = c(1),
                      
 
 # * 1.1 Dosing ------------------------------------------------------------
@@ -82,10 +110,21 @@ ui <- fluidPage(
                                      span(numericInput("dose_total", "Dose (mg)", 0.75, 0, 52, step=0.25),
                                           class="half", style="vertical-align:top"),
                                      span(sliderInput("dose_F", "Dose Fraction Released", min=0, value=1, max=1, step=0.01), class="half"),
+                                     hidden(
+                                       div(
+                                         id = "release_function_dose_warning",
+                                         class = "alert alert-warning",
+                                         role = "alert",
+                                         "The drug concentrations are driven by the release function. If zero-order or Higuchi release function is selected, especially for IUS products, changing the dose does not necessarily result in different concentrations unless the release profile also changes."
+                                       )
+                                     ),
                                      span(numericInput("num_dose", "Number of Doses", value=1, min=1, step=1), class="third"),
                                      span(numericInput("II", "Inter-dose Interval (h)", value=24, min=0, step=0.5), class="third"),
-                                     span(checkboxInput("strict_dur", "Remove Dose After Specified Duration", value=FALSE), class="third",
-                                          bsTooltip("strict_dur", "Simulate the removal of formulation after phase 1 duration. Sets dose compartment amount to zero but does not reset system.")),
+                                    span(checkboxInput("strict_dur", "Remove Dose After Specified Duration", value=FALSE), class="third",
+                                         bsTooltip("strict_dur", "Simulate the removal of formulation after the selected phase duration. Sets dose compartment amount to zero but does not reset system.")),
+                                    span(selectInput("removal_phase", "Remove After Phase",
+                                                     choices = c("Phase 1" = "1")),
+                                         class="third"),
                                      div(id="input_1_params",
                                        hr(),
                                        h4("Input Phase 1", style="text-align:center"),
@@ -128,19 +167,13 @@ ui <- fluidPage(
                                            uiOutput("rate_3")
                                        )
                                      )
-                                     ),
-
-# * 1.2 Vignettes -----------------------------------------------------------
-
-
-                     bsCollapsePanel(title = "Vignettes", value=10, #id="vignettePanel",
-                                     span(
-                                       selectInput("study", "Study",
-                                                   list("Select Study" = "",
-                                                        "Nilsson IUD"="Nilsson_IUD",
-                                                        "Nilsson Oral"="Nilsson_Oral"), selected = NULL)
                                      )
-                                     ),
+
+                  )
+              ),
+              div(class = "param-block block-drug",
+                  h4("Drug-Specific Parameters", class = "block-header"),
+                  bsCollapse(id = "paramsDrug",  multiple = TRUE, open = NULL,
 
 # * 1.3 Vaginal Tissue ----------------------------------------------------
 
@@ -195,24 +228,25 @@ ui <- fluidPage(
 # * 1.5 Uterine Tissue ----------------------------------------------------
 
 
-                     bsCollapsePanel(title = "Uterine Rate Constants (1/hrs)", value = 4, #id="uterinePanel",
-                                     span(numericInput("k_UF_UE", "Uterine Fluid to Endometrium", value=2, min=0, step =0.01 ), class = "half"),
-                                     span(numericInput("k_UE_UF_mean", "Endometrium to Uterine Fluid",value= 0.148, min=0, step =0.01 ), class = "half"),
-                                     hr(),
-                                     span(numericInput("k_UE_UM_mean", "Endometrium to Myometrium", value= 0.076, min=0, step =0.01 ), class = "half"),
-                                     span(numericInput("k_UM_UE_mean", "Myometrium to Endometrium", value= 0.097, min=0, step =0.01 ), class = "half"),
-                                     hr(),
-                                     span(numericInput("k_UM_TtoB_mean", "Myometrium to Blood", value=0.076, min=0, step =0.01 ), class = "half"),
-                                     span(numericInput("k_UM_BtoT", "Blood to Myometrium", value= 3, min=0, step =0.01 ), class = "half")
+                    bsCollapsePanel(title = "Uterine Rate Constants (1/hrs)", value = 4, #id="uterinePanel",
+                                    span(numericInput("k_UF_UE", "Uterine Fluid to Endometrium", value=2, min=0, step =0.01 ), class = "half"),
+                                    span(numericInput("k_UM_BtoT", "Blood to Myometrium", value= 3, min=0, step =0.01 ), class = "half"),
+                                    hr(),
+                                    span(numericInput("k_UE_UF_mean_uterine", "Endometrium to Uterine Fluid Mean", value=0.148, min=0, step=0.01), class="half"),
+                                    span(numericInput("k_UE_UM_mean_uterine", "Endometrium to Myometrium Mean", value=0.076, min=0, step=0.01), class="half"),
+                                    hr(),
+                                    span(numericInput("k_UM_UE_mean_uterine", "Myometrium to Endometrium Mean", value=0.097, min=0, step=0.01), class="half"),
+                                    span(numericInput("k_UM_TtoB_mean_uterine", "Myometrium to Blood Mean", value=0.076, min=0, step=0.01), class="half")
                      ),
 
 # * 1.6 Clearance ---------------------------------------------------------
 
 
                      bsCollapsePanel(title = "Clearance (L/hr)", value = 5, #id="CLPanel",
-                                     span(numericInput("CL_H_mean", "Hepatic Clearance", 7.06, min=0, step =.1 ), class="half"),
                                      span(numericInput("CL_R", "Renal Clearance", 0, min=0, step=0.1), class="half"),
-                                     span(numericInput("CL_L_mean", "Luminal Clearance", 2.5e-5, min=0, step=1e-6), class="half")),
+                                     hr(),
+                                     span(numericInput("CL_L_mean_clearance", "Luminal Clearance Mean", value=2.5E-5, min=0, step=1e-6), class="half"),
+                                     span(numericInput("CL_H_mean_clearance", "Hepatic Clearance Mean", value=7.06, min=0, step=.1), class="half")),
 
                     
 
@@ -260,7 +294,12 @@ ui <- fluidPage(
                                      span(numericInput("P_S", "Spleen", 1.1, 0,  15,  step =0.01 ), class = "half"),
                                      span(numericInput("P_AD", "Adipose Tissue", 5, 0, 15, step = 0.01), class = "half"),
                                      hr(),
-                                     span(numericInput("BP", "BP Ratio", 1.07, 0, 10, step = 0.01 ), class = "half")),
+                                     span(numericInput("BP", "BP Ratio", 1.07, 0, 10, step = 0.01 ), class = "half"))
+                  )
+              ),
+              div(class = "param-block block-sim",
+                  h4("Simulation", class = "block-header"),
+                  bsCollapse(id = "paramsSim",  multiple = TRUE, open = c(9),
 
 
 # * 1.9  Plot Options -----------------------------------------------------
@@ -442,9 +481,71 @@ ui <- fluidPage(
                                     h4("Body Weight"),
                                     span(numericInput("BW_mean", "Mean (kg)", 58.0, min = 35, step = 0.1), class="half"),
                                     span(numericInput("BW_sd", "Standard Deviation (kg)", 8.6, min = 0, step = 0.1), class="half"),
+                                    span(numericInput("BW_min", "Min (kg)", 35, min = 0, step = 0.1), class="half"),
+                                    span(numericInput("BW_max", "Max (kg)", 100, min = 0, step = 0.1), class="half"),
                                     #span(radioButtons("BW_dist", "Distribution Type", choices=c("Normal", "Log-normal"), selected="Normal", inline=TRUE)),
                                     hr(),
-                                    span(numericInput("num_ind", "Number of individuals", 1, min=1, step=1), class="half")),
+                                    h4("Uterine Rate Constants (1/hr)"),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Endometrium to Uterine Fluid"),
+                                        span(numericInput("k_UE_UF_mean", "Mean", value= 0.148, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UE_UF_sd", "SD", value=0.062, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UE_UF_min", "Min", value=0.001, min=0, step =0.001 ), class = "half"),
+                                        span(numericInput("k_UE_UF_max", "Max", value=0.148+4*0.062, min=0, step =0.01 ), class = "half")),
+                                    hr(),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Endometrium to Myometrium"),
+                                        span(numericInput("k_UE_UM_mean", "Mean", value= 0.076, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UE_UM_sd", "SD", value=0.048, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UE_UM_min", "Min", value=0.001, min=0, step =0.001 ), class = "half"),
+                                        span(numericInput("k_UE_UM_max", "Max", value=0.076+4*0.048, min=0, step =0.01 ), class = "half")),
+                                    hr(),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Myometrium to Endometrium"),
+                                        span(numericInput("k_UM_UE_mean", "Mean", value= 0.097, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UM_UE_sd", "SD", value=0.053, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UM_UE_min", "Min", value=0.001, min=0, step =0.001 ), class = "half"),
+                                        span(numericInput("k_UM_UE_max", "Max", value=0.097+4*0.053, min=0, step =0.01 ), class = "half")),
+                                    hr(),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Myometrium to Blood"),
+                                        span(numericInput("k_UM_TtoB_mean", "Mean", value=0.076, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UM_TtoB_sd", "SD", value=0.041, min=0, step =0.01 ), class = "half"),
+                                        span(numericInput("k_UM_TtoB_min", "Min", value=0.001, min=0, step =0.001 ), class = "half"),
+                                        span(numericInput("k_UM_TtoB_max", "Max", value=0.076+4*0.041, min=0, step =0.01 ), class = "half")),
+                                    hr(),
+                                    h4("Physiology"),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Pelvic Blood Flow (L/hr)"),
+                                        span(numericInput("Q_VS_mean", "Mean", value= 2.44, min=0, step=0.1), class="half"),
+                                        span(numericInput("Q_VS_sd", "SD", value= 1.37, min=0, step=0.1), class="half"),
+                                        span(numericInput("Q_VS_min", "Min", value=1, min=0, step=0.1), class="half"),
+                                        span(numericInput("Q_VS_max", "Max", value=50, min=0, step=0.1), class="half")),
+                                    hr(),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Uterine Volume Fraction"),
+                                        span(numericInput("F_Uterus_mean", "Mean", value = 1.68E-3, min=0, step=1e-4), class="half"),
+                                        span(numericInput("F_Uterus_sd", "SD", value = 6.12E-4, min=0, step=1e-4), class="half"),
+                                        span(numericInput("F_Uterus_min", "Min", value=3.25E-4, min=0, step=1e-4), class="half"),
+                                        span(numericInput("F_Uterus_max", "Max", value=0.021, min=0, step=1e-4), class="half")),
+                                    hr(),
+                                    h4("Clearance (L/hr)"),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Luminal Clearance"),
+                                        span(numericInput("CL_L_mean", "Mean", value = 2.5E-5, min=0, step=1e-6), class="half"),
+                                        span(numericInput("CL_L_sd", "SD", value= 1E-5, min=0, step=1e-6), class="half"),
+                                        span(numericInput("CL_L_min", "Min", value=1E-6, min=0, step=1e-6), class="half"),
+                                        span(numericInput("CL_L_max", "Max", value=0.01, min=0, step=1e-6), class="half")),
+                                    hr(),
+                                    div(class="population-var-group",
+                                        div(class="population-var-label", "Hepatic Clearance"),
+                                        span(numericInput("CL_H_mean", "Mean", value = 7.06, min=0, step =.1 ), class="half"),
+                                        span(numericInput("CL_H_sd", "SD", value = 0.46, min=0, step =.1 ), class="half"),
+                                        span(numericInput("CL_H_min", "Min", value=0.1, min=0, step =.1 ), class="half"),
+                                        span(numericInput("CL_H_max", "Max", value=67.62, min=0, step =.1 ), class="half")),
+                                    hr(),
+                                    span(numericInput("num_ind", "Number of individuals", 1, min=1, step=1), class="half"),
+                                    span(numericInput("pop_seed", "Population simulation seed", 12345, min=0, max=.Machine$integer.max, step=1), class="half")),
 
 
 
@@ -459,16 +560,21 @@ ui <- fluidPage(
                                      span(downloadButton("sim_data", "Download Simulation Output"), class="half"),
                                      span(actionButton("data_prev", "View Input Dataset"), class="half"),
                                      hr(),
-                                     downloadButton("downloadData2", "Download parameters"),
-                                     downloadButton("downloadData", "Download Input"),
+                                     fileInput("obs_file", "Upload Observation Data (.csv)", accept = ".csv"),
+                                     checkboxInput("show_user_obs", "Show uploaded observations", value = TRUE),
+                                     tags$small("Template units: time in hours; concentration, lower, and upper in mg/L. Leave lower/upper blank if unavailable."),
+                                     br(),
+                                     downloadButton("obs_template", "Download Observation Template"),
+                                     actionButton("clear_obs", "Remove Uploaded Observations", class = "btn-default"),
                                      hr(),
-                                     wellPanel(span(actionButton("resetParams", "Reset"), class = "half"),
-                                               span(actionButton("runSim", "Run Simulation"), class="half")
-                                               #checkboxInput("autoRun", "Update Simulation Automatically", value=FALSE)
-                                               )
+                                     downloadButton("downloadData2", "Download parameters"),
+                                     downloadButton("downloadData", "Download Input")
+                                     #checkboxInput("autoRun", "Update Simulation Automatically", value=FALSE)
                                      )
                      
                      )
+                  )
+              )
           ),
 
 
@@ -476,7 +582,14 @@ ui <- fluidPage(
 
             
       div(
-        tabsetPanel(id="outputTabset",
+        hidden(
+          div(id = "user_defined_prompt",
+              class = "user-defined-prompt",
+              h4("Please provide your input"),
+              textOutput("user_defined_prompt_text"))
+        ),
+        div(id = "simulation_output_tabs",
+          tabsetPanel(id="outputTabset",
                     
 
 # * 2.1 Vaginal Lumen --------------------------------------------------------
@@ -686,7 +799,11 @@ ui <- fluidPage(
 
           tabPanel("Input Dataset",
                    column(12,DT::dataTableOutput("table1"),
+                          style="height=600px; overflow-y: scroll; overflow-x:scroll")),
+          tabPanel("Uploaded Observations",
+                   column(12,DT::dataTableOutput("obs_preview"),
                           style="height=600px; overflow-y: scroll; overflow-x:scroll"))
+          )
         ),
         class = "output-container")
 
@@ -702,6 +819,13 @@ server <- function(input, output,session) {
   
   # Stop the app when the browser tab is closed
   session$onSessionEnded(stopApp)
+  
+  userDefinedReady <- reactiveVal(FALSE)
+  userDefinedPrompt <- reactiveVal("Please provide your input, then click Run Simulation.")
+  
+  output$user_defined_prompt_text <- renderText({
+    userDefinedPrompt()
+  })
 
 
 # 3. Simulation -----------------------------------------------------------
@@ -728,6 +852,14 @@ server <- function(input, output,session) {
       
       # Create dependency on the "Run Simulation" button
       #input$runSim
+      
+      if(isTRUE(input$study == "User_Defined")) {
+        missing_message <- user_defined_missing_inputs()
+        validate(
+          need(is.null(missing_message), missing_message)
+        )
+        userDefinedReady(TRUE)
+      }
       
       # validate(
       #   need(near(slider_sum(), 1.00), paste0("Error: Current total dose input fraction is ", slider_sum())),
@@ -849,7 +981,8 @@ server <- function(input, output,session) {
         P_Bone = input$P_Bone,
         P_Muscle = input$P_Muscle,
         P_Skin = input$P_Skin,
-        BP = input$BP
+        BP = input$BP,
+        population_seed = input$pop_seed
         )
         
         
@@ -976,6 +1109,205 @@ server <- function(input, output,session) {
       return(new_param)
     }
     
+    observation_compartment_map <- c(
+      VF = "Lumen",
+      VE = "Epi",
+      VM = "Stroma",
+      Plasma = "Plasma",
+      CF = "CF",
+      CE = "CE",
+      CM = "CM",
+      UF = "UF",
+      UE = "UE",
+      UM = "UM"
+    )
+    
+    observation_template <- data.frame(
+      time = c(0, 24, 48, 24, 48, 72),
+      compartment = c("Plasma", "Plasma", "Plasma", "VF", "UE", "UM"),
+      concentration = c(0.000, 0.150, 0.220, 0.003, 0.450, 0.620),
+      lower = c(NA, 0.100, 0.180, NA, NA, NA),
+      upper = c(NA, 0.200, 0.260, NA, NA, NA),
+      dataset = rep("Example study", 6),
+      stringsAsFactors = FALSE
+    )
+    
+    output$obs_template <- downloadHandler(
+      filename = function(){"observation_template.csv"},
+      content = function(file) {
+        write.csv(observation_template, file, row.names = FALSE, na = "")
+      }
+    )
+    
+    observationUploadCleared <- reactiveVal(FALSE)
+    
+    observeEvent(input$obs_file, {
+      observationUploadCleared(FALSE)
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$clear_obs, {
+      observationUploadCleared(TRUE)
+      reset("obs_file")
+      updateCheckboxInput(session, "show_user_obs", value = TRUE)
+      for (plot_index in 1:12) {
+        updateCheckboxInput(session, paste0("fit_plot", plot_index), value = TRUE)
+      }
+      updateTabsetPanel(session, "outputTabset", selected = "Plasma")
+    })
+    
+    uploadedObservations <- reactive({
+      if (isTRUE(observationUploadCleared()) || is.null(input$obs_file)) {
+        return(NULL)
+      }
+      
+      obs_raw <- read.csv(input$obs_file$datapath, stringsAsFactors = FALSE, na.strings = c("", "NA"))
+      names(obs_raw) <- trimws(names(obs_raw))
+      
+      required_cols <- c("time", "compartment", "concentration")
+      missing_cols <- setdiff(required_cols, names(obs_raw))
+      validate(
+        need(length(missing_cols) == 0, paste("Uploaded observation file is missing required column(s):", paste(missing_cols, collapse = ", ")))
+      )
+      
+      optional_cols <- c("lower", "upper", "dataset")
+      for (col_name in optional_cols) {
+        if (!col_name %in% names(obs_raw)) {
+          obs_raw[[col_name]] <- NA
+        }
+      }
+      
+      obs_raw$compartment <- trimws(obs_raw$compartment)
+      invalid_compartments <- setdiff(unique(obs_raw$compartment), names(observation_compartment_map))
+      validate(
+        need(length(invalid_compartments) == 0,
+             paste("Invalid compartment label(s):", paste(invalid_compartments, collapse = ", "),
+                   ". Allowed labels are:", paste(names(observation_compartment_map), collapse = ", ")))
+      )
+      
+      obs_clean <- data.frame(
+        time = suppressWarnings(as.numeric(obs_raw$time)),
+        time_days = suppressWarnings(as.numeric(obs_raw$time)) / 24,
+        compartment = obs_raw$compartment,
+        plot_compartment = unname(observation_compartment_map[obs_raw$compartment]),
+        concentration = suppressWarnings(as.numeric(obs_raw$concentration)),
+        conc_mg_L = suppressWarnings(as.numeric(obs_raw$concentration)),
+        lower_mg_L = suppressWarnings(as.numeric(obs_raw$lower)),
+        upper_mg_L = suppressWarnings(as.numeric(obs_raw$upper)),
+        dataset = ifelse(is.na(obs_raw$dataset) | trimws(obs_raw$dataset) == "", "Uploaded observations", obs_raw$dataset),
+        stringsAsFactors = FALSE
+      )
+      
+      validate(
+        need(all(is.finite(obs_clean$time) & obs_clean$time >= 0), "Observation time must be numeric hours greater than or equal to 0."),
+        need(all(is.finite(obs_clean$concentration)), "Observation concentration must be numeric and in mg/L.")
+      )
+      
+      lower_provided <- !is.na(obs_raw$lower)
+      upper_provided <- !is.na(obs_raw$upper)
+      bounds_provided <- lower_provided & upper_provided
+      validate(
+        need(all(!lower_provided | is.finite(obs_clean$lower_mg_L)), "Observation lower values must be numeric mg/L when provided."),
+        need(all(!upper_provided | is.finite(obs_clean$upper_mg_L)), "Observation upper values must be numeric mg/L when provided."),
+        need(all(!bounds_provided | obs_clean$lower_mg_L <= obs_clean$upper_mg_L), "Observation lower values must be less than or equal to upper values.")
+      )
+      
+      obs_clean
+    })
+    
+    uploaded_observation_plot_map <- data.frame(
+      plot_compartment = c("Lumen", "Epi", "Stroma", "Plasma", "CF", "CE", "CM", "UF", "UE", "UM"),
+      plot_index = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+      stringsAsFactors = FALSE
+    )
+    
+    simulation_axis_values <- function(plot_compartment) {
+      sim_out <- tryCatch(isolate(results()), error = function(e) NULL)
+      if (is.null(sim_out) || nrow(sim_out) == 0) {
+        return(list(x = numeric(0), y = numeric(0)))
+      }
+      
+      mass_conv_factor <- 1e-3
+      y_values <- switch(
+        plot_compartment,
+        "Lumen" = sim_out$C_totLUMEN * mass_conv_factor,
+        "Epi" = sim_out$C_totEPI * mass_conv_factor,
+        "Stroma" = sim_out$C_totSTROMA * mass_conv_factor,
+        "Plasma" = sim_out$VEINS * mass_conv_factor / input$BP,
+        "CF" = sim_out$CERVIX_FLUID * mass_conv_factor,
+        "CE" = sim_out$CERVIX_EPITHELIUM * mass_conv_factor,
+        "CM" = sim_out$CERVIX_MYOMETRIUM * mass_conv_factor,
+        "UF" = sim_out$UTERUS_FLUID * mass_conv_factor,
+        "UE" = sim_out$UTERUS_ENDOMETRIUM * mass_conv_factor,
+        "UM" = sim_out$UTERUS_MYOMETRIUM * mass_conv_factor,
+        numeric(0)
+      )
+      
+      list(
+        x = sim_out$time[is.finite(sim_out$time)],
+        y = y_values[is.finite(y_values)]
+      )
+    }
+    
+    observeEvent(uploadedObservations(), {
+      obs <- uploadedObservations()
+      if (is.null(obs) || nrow(obs) == 0) {
+        return(NULL)
+      }
+      
+      for (i in seq_len(nrow(uploaded_observation_plot_map))) {
+        plot_compartment <- uploaded_observation_plot_map$plot_compartment[i]
+        plot_index <- uploaded_observation_plot_map$plot_index[i]
+        plot_obs <- obs[obs$plot_compartment == plot_compartment, , drop = FALSE]
+        if (nrow(plot_obs) == 0) {
+          next
+        }
+        
+        sim_values <- simulation_axis_values(plot_compartment)
+        x_values <- c(sim_values$x, plot_obs$time_days)
+        x_values <- x_values[is.finite(x_values)]
+        y_values <- c(sim_values$y, plot_obs$conc_mg_L, plot_obs$lower_mg_L, plot_obs$upper_mg_L)
+        y_values <- y_values[is.finite(y_values)]
+        
+        if (length(x_values) > 0) {
+          updateNumericInput(session, paste0("x_min", plot_index), value = max(0, min(x_values, na.rm = TRUE) * 0.9))
+          updateNumericInput(session, paste0("x_max", plot_index), value = max(x_values, na.rm = TRUE) * 1.1)
+        }
+        
+        if (length(y_values) > 0) {
+          updateNumericInput(session, paste0("y_min", plot_index), value = max(0, min(y_values, na.rm = TRUE) * 0.9))
+          updateNumericInput(session, paste0("y_max", plot_index), value = max(y_values, na.rm = TRUE) * 1.1)
+        }
+        
+        updateCheckboxInput(session, paste0("fit_plot", plot_index), value = FALSE)
+      }
+    }, ignoreInit = TRUE)
+    
+    user_obs_for_plot <- function(plot_compartment) {
+      if (!isTRUE(input$show_user_obs)) {
+        return(NULL)
+      }
+      
+      obs <- uploadedObservations()
+      if (is.null(obs)) {
+        return(NULL)
+      }
+      
+      obs[obs$plot_compartment == plot_compartment, , drop = FALSE]
+    }
+    
+    output$obs_preview <- renderDataTable({
+      obs <- uploadedObservations()
+      if (is.null(obs)) {
+        return(datatable(
+          data.frame(Status = "No observation data uploaded yet."),
+          options = list(dom = "t"),
+          rownames = FALSE
+        ))
+      }
+      
+      datatable(obs, options = list(pageLength = 10))
+    })
+    
     # Handler for downloading simulation data
     output$sim_data <- downloadHandler(
       filename = function(){"sim_output.csv"},
@@ -985,6 +1317,417 @@ server <- function(input, output,session) {
         #   rename(time_days=time) %>%
         #   mutate(conc_units = "ug/L")
         write.csv(results(), file, row.names = FALSE)
+      }
+    )
+
+    output$report_html <- downloadHandler(
+      filename = function() {
+        paste0("simulation_report_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip")
+      },
+      content = function(file) {
+        simulation_output <- results()
+        if (is.null(simulation_output)) {
+          stop("Run a simulation before generating a report.")
+        }
+        uploaded_observations <- uploadedObservations()
+
+        html_table <- function(data, max_rows = 1000) {
+          data <- as.data.frame(data)
+          row_count <- nrow(data)
+          col_count <- ncol(data)
+          shown <- if (row_count > max_rows) utils::head(data, max_rows) else data
+          note <- if (row_count > max_rows) {
+            paste("Showing first", max_rows, "of", row_count, "rows.")
+          } else {
+            paste("Showing all", row_count, "rows.")
+          }
+
+          header <- paste0(
+            "<tr>",
+            paste0("<th>", htmltools::htmlEscape(names(shown)), "</th>", collapse = ""),
+            "</tr>"
+          )
+          rows <- apply(shown, 1, function(row) {
+            paste0(
+              "<tr>",
+              paste0("<td>", htmltools::htmlEscape(as.character(row)), "</td>", collapse = ""),
+              "</tr>"
+            )
+          })
+          paste0(
+            "<p>", note, " Dimensions: ", row_count, " rows x ", col_count, " columns.</p>",
+            "<div class='table-wrap'><table>",
+            header,
+            paste(rows, collapse = ""),
+            "</table></div>"
+          )
+        }
+
+        parameter_descriptions <- function(parameter_names) {
+          descriptions <- c(
+            dur1 = "Duration of dosing phase 1 (unit: h)",
+            dur2 = "Duration of dosing phase 2 (unit: h)",
+            dur3 = "Duration of dosing phase 3 (unit: h)",
+            F = "Fraction of administered dose available for absorption (unitless)",
+            f1 = "Fraction of dose released in dosing phase 1 (unitless)",
+            f2 = "Fraction of dose released in dosing phase 2 (unitless)",
+            f3 = "Fraction of dose released in dosing phase 3 (unitless)",
+            dose = "Total administered dose converted to micrograms (unit: ug)",
+            k_LE = "First order rate constant from vaginal lumen fluid to vaginal epithelium (unit: 1/h)",
+            k_EL = "First order rate constant from vaginal epithelium to vaginal lumen fluid (unit: 1/h)",
+            k_EVS = "First order rate constant from vaginal epithelium to vaginal stroma (unit: 1/h)",
+            k_VSE = "First order rate constant from vaginal stroma to vaginal epithelium (unit: 1/h)",
+            k_VS_TtoB = "First order rate constant from vaginal stroma tissue to blood (unit: 1/h)",
+            k_VS_BtoT = "First order rate constant from blood to vaginal stroma tissue (unit: 1/h)",
+            k_activeEtoS = "Active transport rate from vaginal epithelium to stroma (unit: 1/h)",
+            k_active_StrTtoB = "Active transport rate from vaginal stroma tissue to blood (unit: 1/h)",
+            CL_R = "Renal clearance (unit: L/h)",
+            P_H = "Liver partition coefficient (unitless)",
+            P_R = "Kidney partition coefficient (unitless)",
+            P_B = "Body partition coefficient (unitless)",
+            P_G = "Gut partition coefficient (unitless)",
+            P_S = "Spleen partition coefficient (unitless)",
+            P_AD = "Adipose tissue partition coefficient (unitless)",
+            P_Lungs = "Lung partition coefficient (unitless)",
+            P_VS = "Vaginal stroma partition coefficient (unitless)",
+            pH_Lumen = "Luminal fluid pH (unitless)",
+            pH_Body = "Body pH (unitless)",
+            pKa = "Drug pKa used for ionization calculations (unitless)",
+            solubility = "Aqueous solubility (unit: mg/L)",
+            f_unbound = "Fraction of drug unbound (unitless)",
+            k_L_CF = "First order rate constant from vaginal lumen fluid to cervical fluid (unit: 1/h)",
+            k_CF_L = "First order rate constant from cervical fluid to vaginal lumen fluid (unit: 1/h)",
+            k_VE_CE = "First order rate constant from vaginal epithelium to cervical epithelium (unit: 1/h)",
+            k_CE_VE = "First order rate constant from cervical epithelium to vaginal epithelium (unit: 1/h)",
+            k_VS_CM = "First order rate constant from vaginal stroma to cervical myometrium (unit: 1/h)",
+            k_CM_VS = "First order rate constant from cervical myometrium to vaginal stroma (unit: 1/h)",
+            k_CF_CE = "First order rate constant from cervical fluid to cervical endometrium (unit: 1/h)",
+            k_CE_CF = "First order rate constant from cervical endometrium to cervical fluid (unit: 1/h)",
+            k_CE_CM = "First order rate constant from cervical endometrium to cervical myometrium (unit: 1/h)",
+            k_CM_CE = "First order rate constant from cervical myometrium to cervical endometrium (unit: 1/h)",
+            k_CM_TtoB = "First order rate constant from cervical myometrium tissue to blood (unit: 1/h)",
+            k_CM_BtoT = "First order rate constant from blood to cervical myometrium tissue (unit: 1/h)",
+            k_CF_UF = "First order rate constant from cervical fluid to uterine fluid (unit: 1/h)",
+            k_UF_CF = "First order rate constant from uterine fluid to cervical fluid (unit: 1/h)",
+            k_CE_UE = "First order rate constant from cervical endometrium to uterine endometrium (unit: 1/h)",
+            k_UE_CE = "First order rate constant from uterine endometrium to cervical endometrium (unit: 1/h)",
+            k_CM_UM = "First order rate constant from cervical myometrium to uterine myometrium (unit: 1/h)",
+            k_UM_CM = "First order rate constant from uterine myometrium to cervical myometrium (unit: 1/h)",
+            k_UF_UE = "First order rate constant from uterine fluid to uterine endometrium (unit: 1/h)",
+            k_UE_UF = "First order rate constant from uterine endometrium to uterine fluid (unit: 1/h)",
+            k_UE_UM = "First order rate constant from uterine endometrium to uterine myometrium (unit: 1/h)",
+            k_UM_UE = "First order rate constant from uterine myometrium to uterine endometrium (unit: 1/h)",
+            k_UM_TtoB = "First order rate constant from uterine myometrium tissue to blood (unit: 1/h)",
+            k_UM_BtoT = "First order rate constant from blood to uterine myometrium tissue (unit: 1/h)",
+            P_CM = "Cervical myometrium partition coefficient (unitless)",
+            P_UM = "Uterine myometrium partition coefficient (unitless)",
+            ZO1 = "Zero-order release rate for dosing phase 1 (unit: ug/h)",
+            ZO2 = "Zero-order release rate for dosing phase 2 (unit: ug/h)",
+            ZO3 = "Zero-order release rate for dosing phase 3 (unit: ug/h)",
+            FO1 = "First-order release rate for dosing phase 1 (unit: 1/h)",
+            FO2 = "First-order release rate for dosing phase 2 (unit: 1/h)",
+            FO3 = "First-order release rate for dosing phase 3 (unit: 1/h)",
+            SQ1 = "Higuchi square-root release rate for dosing phase 1 (unit: ug/sqrt(h))",
+            SQ2 = "Higuchi square-root release rate for dosing phase 2 (unit: ug/sqrt(h))",
+            SQ3 = "Higuchi square-root release rate for dosing phase 3 (unit: ug/sqrt(h))",
+            TD1 = "Time dependence for dosing phase 1",
+            TD2 = "Time dependence for dosing phase 2",
+            TD3 = "Time dependence for dosing phase 3",
+            lag1 = "Lag time for dosing phase 1 (unit: h)",
+            lag2 = "Lag time for dosing phase 2 (unit: h)",
+            lag3 = "Lag time for dosing phase 3 (unit: h)",
+            P_Heart = "Heart partition coefficient (unitless)",
+            P_Bone = "Bone partition coefficient (unitless)",
+            P_Muscle = "Muscle partition coefficient (unitless)",
+            P_Skin = "Skin partition coefficient (unitless)",
+            BP = "Blood-to-plasma concentration ratio (unitless)",
+            population_seed = "Random seed used for population simulation (unitless)",
+            G_Flag = "Oral administration route flag (unitless)",
+            U_Flag = "Uterine administration route flag (unitless)",
+            V_Flag = "Vaginal administration route flag (unitless)",
+            Simult = "Dosing sequence flag: simultaneous equals 1 and sequential equals 0 (unitless)"
+          )
+
+          description_values <- unname(descriptions[parameter_names])
+          description_values[is.na(description_values)] <- ""
+          description_values
+        }
+        
+        create_report_figures <- function(simulation_output) {
+          mass_conv_factor <- 1e-3
+          list(
+            list(
+              title = "Plasma",
+              plot_compartment = "Plasma",
+              y_data = simulation_output$VEINS * mass_conv_factor / input$BP,
+              y_label = "Plasma Concentration [mg/L]",
+              log_scale = isTRUE(input$log_Plasma)
+            ),
+            list(
+              title = "Total Vaginal Lumen Fluid",
+              plot_compartment = "Lumen",
+              y_data = simulation_output$C_totLUMEN * mass_conv_factor,
+              y_label = "Lumen Concentration [mg/L]",
+              log_scale = isTRUE(input$log_Lumen)
+            ),
+            list(
+              title = "Vaginal Stroma",
+              plot_compartment = "Stroma",
+              y_data = simulation_output$C_totSTROMA * mass_conv_factor,
+              y_label = "Stroma Concentration [mg/L]",
+              log_scale = isTRUE(input$log_Stroma)
+            ),
+            list(
+              title = "Cervical Myometrium",
+              plot_compartment = "CM",
+              y_data = simulation_output$CERVIX_MYOMETRIUM * mass_conv_factor,
+              y_label = "Cervical Myometrium Concentration [mg/L]",
+              log_scale = isTRUE(input$log_CM)
+            ),
+            list(
+              title = "Uterine Endometrium",
+              plot_compartment = "UE",
+              y_data = simulation_output$UTERUS_ENDOMETRIUM * mass_conv_factor,
+              y_label = "Endometrium Concentration [mg/L]",
+              log_scale = isTRUE(input$log_UE)
+            ),
+            list(
+              title = "Uterine Myometrium",
+              plot_compartment = "UM",
+              y_data = simulation_output$UTERUS_MYOMETRIUM * mass_conv_factor,
+              y_label = "Uterine Myometrium Concentration [mg/L]",
+              log_scale = isTRUE(input$log_UM)
+            )
+          )
+        }
+        
+        report_y_range <- function(y_data, log_scale) {
+          finite_y <- y_data[is.finite(y_data)]
+          if (length(finite_y) == 0) {
+            return(c(1e-12, 1))
+          }
+          
+          if (isTRUE(log_scale)) {
+            positive_y <- finite_y[finite_y > 0]
+            if (length(positive_y) == 0) {
+              return(c(1e-12, 1))
+            }
+            y_min <- max(min(positive_y, na.rm = TRUE) * 0.9, 1e-12)
+            y_max <- max(positive_y, na.rm = TRUE) * 1.1
+          } else {
+            y_min <- min(finite_y, na.rm = TRUE) * 0.9
+            y_max <- max(finite_y, na.rm = TRUE) * 1.1
+          }
+          
+          if (!is.finite(y_min) || !is.finite(y_max) || y_min == y_max) {
+            y_min <- 0
+            y_max <- max(finite_y, na.rm = TRUE) + 1
+          }
+          
+          c(max(y_min, 1e-12), max(y_max, 1e-12))
+        }
+        
+        render_report_figure <- function(fig, simulation_output, num_ind, uploaded_observations = NULL) {
+          fig_obs <- NULL
+          if (!is.null(uploaded_observations) && "plot_compartment" %in% names(uploaded_observations)) {
+            fig_obs <- uploaded_observations[uploaded_observations$plot_compartment == fig$plot_compartment, , drop = FALSE]
+          }
+          base_y_range <- report_y_range(fig$y_data, fig$log_scale)
+          y_range <- range_with_user_observations(
+            base_y_range[1],
+            base_y_range[2],
+            fig_obs,
+            fig$log_scale
+          )
+          x_range <- range(0, max(simulation_output$time, na.rm = TRUE))
+          
+          par(oma = c(1, 1, 1, 1))
+          par(mar = c(5, 6, 4, 2))
+          plot_simulated_profile(
+            simulation_output,
+            fig$y_data,
+            x_range,
+            y_range,
+            fig$log_scale,
+            num_ind
+          )
+          axis(side = 1, cex.axis = 1.1)
+          axis(side = 2, las = 1, cex.axis = 1.1)
+          box()
+          title(main = fig$title)
+          mtext(side = 1, "Time [days]", line = 3, cex = 1.1)
+          mtext(side = 2, fig$y_label, line = 4, cex = 1.1)
+          
+          sim_legend <- simulated_profile_legend(num_ind)
+          user_legend <- plot_user_observations(
+            fig_obs,
+            sim_legend$labels,
+            sim_legend$col,
+            sim_legend$lty,
+            sim_legend$pch,
+            errorBars = TRUE,
+            logScale = fig$log_scale
+          )
+          legend(
+            "topright",
+            legend = user_legend$labels,
+            col = user_legend$col,
+            lty = user_legend$lty,
+            pch = user_legend$pch,
+            lwd = 2,
+            bty = "n",
+            x.intersp = 0.7,
+            seg.len = 1.4
+          )
+        }
+        
+        report_figures_html <- function(report_params) {
+          if (!requireNamespace("knitr", quietly = TRUE)) {
+            return("<p>Simulation figures could not be embedded because the knitr package is unavailable.</p>")
+          }
+          
+          paste0(
+            vapply(report_params$figures, function(fig) {
+              image_file <- tempfile(fileext = ".png")
+              plot_error <- NULL
+              grDevices::png(image_file, width = 900, height = 650, res = 120)
+              tryCatch(
+                render_report_figure(fig, report_params$simulation_output, report_params$num_ind, report_params$uploaded_observations),
+                error = function(e) {
+                  plot_error <<- e
+                },
+                finally = {
+                  grDevices::dev.off()
+                }
+              )
+              
+              if (!is.null(plot_error)) {
+                unlink(image_file)
+                return(paste0(
+                  "<h3>", htmltools::htmlEscape(fig$title), "</h3>",
+                  "<p>Unable to render this figure: ",
+                  htmltools::htmlEscape(conditionMessage(plot_error)),
+                  "</p>"
+                ))
+              }
+              
+              image_uri <- knitr::image_uri(image_file)
+              unlink(image_file)
+              paste0(
+                "<h3>", htmltools::htmlEscape(fig$title), "</h3>",
+                "<img class='report-figure' src='", image_uri, "' alt='",
+                htmltools::htmlEscape(fig$title), "' />"
+              )
+            }, character(1)),
+            collapse = ""
+          )
+        }
+
+        write_fallback_report <- function(report_params, output_file) {
+          html <- paste0(
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>",
+            "<title>PBPK Simulation Report</title>",
+            "<style>",
+            "body{font-family:Arial,sans-serif;margin:30px;color:#222;}",
+            "h1{color:#337ab7;} h2{border-bottom:1px solid #ddd;padding-bottom:4px;}",
+            "table{border-collapse:collapse;font-size:12px;} th,td{border:1px solid #ddd;padding:4px 6px;}",
+            "th{background:#f5f5f5;} .table-wrap{overflow-x:auto;margin-bottom:24px;}",
+            ".download-link{display:inline-block;margin:8px 0 16px 0;padding:10px 14px;background:#337ab7;color:#fff;text-decoration:none;border-radius:4px;font-weight:bold;}",
+            ".report-figure{display:block;max-width:100%;margin:8px 0 24px 0;border:1px solid #ddd;}",
+            "pre{background:#f7f7f7;border:1px solid #ddd;padding:10px;overflow-x:auto;}",
+            "</style></head><body>",
+            "<h1>PBPK Simulation Report</h1>",
+            "<h2>Scenario Summary</h2>",
+            "<p><strong>Generated at:</strong> ", htmltools::htmlEscape(report_params$generated_at), "</p>",
+            "<p><strong>Population simulation seed:</strong> ", htmltools::htmlEscape(as.character(report_params$population_seed)), "</p>",
+            "<p><strong>Model file:</strong> www/PBPK.cpp</p>",
+            "<h2>Converted Model Parameters</h2>",
+            "<p><a class='download-link' href='parameters.csv' download='parameters.csv'>Download parameters.csv</a></p>",
+            html_table(report_params$parameters, max_rows = Inf),
+            "<h2>Generated Input Dataset</h2>",
+            "<p><a class='download-link' href='input_dataset.csv' download='input_dataset.csv'>Download input_dataset.csv</a></p>",
+            html_table(report_params$input_data, max_rows = 20),
+            "<h2>Simulation Output</h2>",
+            "<p><a class='download-link' href='simulation_output.csv' download='simulation_output.csv'>Download full simulation_output.csv</a></p>",
+            html_table(report_params$simulation_output, max_rows = 20),
+            if (!is.null(report_params$uploaded_observations)) {
+              paste0(
+                "<h2>Uploaded Observations</h2>",
+                "<p><a class='download-link' href='uploaded_observations.csv' download='uploaded_observations.csv'>Download uploaded_observations.csv</a></p>",
+                html_table(report_params$uploaded_observations, max_rows = 20)
+              )
+            } else {
+              ""
+            },
+            "<h2>Simulation Figures</h2>",
+            report_figures_html(report_params),
+            "<h2>Reproducibility Notes</h2>",
+            "<p>For population simulations, use the listed population seed and retain the generated input dataset above to reproduce the exact simulated population scenario.</p>",
+            "<h2>R Session Info</h2><pre>",
+            htmltools::htmlEscape(paste(report_params$session_info, collapse = "\n")),
+            "</pre></body></html>"
+          )
+          writeLines(html, output_file)
+        }
+
+        converted_parameters <- unlist(pmt(), use.names = TRUE)
+
+        report_params <- list(
+          generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+          parameters = data.frame(
+            Parameter = names(converted_parameters),
+            Description = parameter_descriptions(names(converted_parameters)),
+            Value = as.character(converted_parameters),
+            stringsAsFactors = FALSE
+          ),
+          input_data = inputData(),
+          simulation_output = simulation_output,
+          uploaded_observations = uploaded_observations,
+          population_seed = input$pop_seed,
+          num_ind = input$num_ind,
+          figures = create_report_figures(simulation_output),
+          session_info = capture.output(sessionInfo())
+        )
+
+        report_dir <- tempfile("simulation_report_")
+        dir.create(report_dir)
+        report_html <- file.path(report_dir, "report.html")
+        report_csv <- file.path(report_dir, "simulation_output.csv")
+        input_csv <- file.path(report_dir, "input_dataset.csv")
+        parameters_csv <- file.path(report_dir, "parameters.csv")
+        uploaded_obs_csv <- file.path(report_dir, "uploaded_observations.csv")
+        write.csv(simulation_output, report_csv, row.names = FALSE)
+        write.csv(report_params$input_data, input_csv, row.names = FALSE)
+        write.csv(report_params$parameters, parameters_csv, row.names = FALSE)
+        if (!is.null(report_params$uploaded_observations)) {
+          write.csv(report_params$uploaded_observations, uploaded_obs_csv, row.names = FALSE)
+        }
+
+        if (requireNamespace("rmarkdown", quietly = TRUE) && rmarkdown::pandoc_available()) {
+          template <- file.path("www", "report_template.Rmd")
+          temp_report <- file.path(report_dir, "report_template.Rmd")
+          file.copy(template, temp_report, overwrite = TRUE)
+
+          rmarkdown::render(
+            input = temp_report,
+            output_file = "report.html",
+            output_dir = report_dir,
+            params = report_params,
+            envir = new.env(parent = globalenv()),
+            quiet = TRUE
+          )
+        } else {
+          write_fallback_report(report_params, report_html)
+        }
+
+        old_wd <- getwd()
+        on.exit(setwd(old_wd), add = TRUE)
+        setwd(report_dir)
+        report_files <- c("report.html", "parameters.csv", "simulation_output.csv", "input_dataset.csv")
+        if (!is.null(report_params$uploaded_observations)) {
+          report_files <- c(report_files, "uploaded_observations.csv")
+        }
+        utils::zip(zipfile = file, files = report_files)
       }
     )
     
@@ -1038,75 +1781,100 @@ server <- function(input, output,session) {
          )
          
          
-         # Create vector of dose times
-         dose_times <- seq(0, to=(input$num_dose-1)*input$II, by=input$II)
-      
-         addl_vals<-(input$num_dose-1)
-         ii_vals<-input$II
+        validate(
+          need(input$num_dose >= 1, "Number of doses must be at least 1."),
+          need(input$num_dose == floor(input$num_dose), "Number of doses must be an integer."),
+          need(input$num_dose <= 1 || input$II > 0, "Inter-dose interval must be greater than zero for repeated dosing.")
+        )
+        dose_count <- as.integer(input$num_dose)
+        
+        # Create vector of explicit dose times. Each dose gets its own full
+        # multiphase event schedule, so addl/ii are not used here.
+        dose_times <- seq(0, by=input$II, length.out=dose_count)
+     
+        addl_vals <- 0
+        ii_vals <- 0
          
          
          # Create vector of ID values
          ID_vals <- seq(1, to=input$num_ind)
          
+         shiny::req(input$pop_seed)
+         set.seed(as.integer(input$pop_seed))
+         
+         if(input$num_ind > 1) {
+           validate(
+             need(input$BW_min < input$BW_max, "Population Body Weight Min must be less than Max."),
+             need(input$k_UE_UF_min < input$k_UE_UF_max, "Population Endometrium to Uterine Fluid Min must be less than Max."),
+             need(input$k_UE_UM_min < input$k_UE_UM_max, "Population Endometrium to Myometrium Min must be less than Max."),
+             need(input$k_UM_UE_min < input$k_UM_UE_max, "Population Myometrium to Endometrium Min must be less than Max."),
+             need(input$k_UM_TtoB_min < input$k_UM_TtoB_max, "Population Myometrium to Blood Min must be less than Max."),
+             need(input$Q_VS_min < input$Q_VS_max, "Population Pelvic Blood Flow Min must be less than Max."),
+             need(input$F_Uterus_min < input$F_Uterus_max, "Population Uterine Volume Fraction Min must be less than Max."),
+             need(input$CL_L_min < input$CL_L_max, "Population Luminal Clearance Min must be less than Max."),
+             need(input$CL_H_min < input$CL_H_max, "Population Hepatic Clearance Min must be less than Max.")
+           )
+         }
+         
          # Create vector of simulated body weights
          if(input$num_ind > 1) {
-           weight_vals <- rtruncnorm(input$num_ind, a = 35, b = 100, input$BW_mean, input$BW_sd)
+           weight_vals <- rtruncnorm(input$num_ind, a = input$BW_min, b = input$BW_max, input$BW_mean, input$BW_sd)
          } else {
            weight_vals <- input$BW_mean
          }
          
          # Create vector of k_UE_UF
          if(input$num_ind > 1) {
-           k_UE_UF_val <- rtruncnorm(input$num_ind, a = 0.001, b = input$k_UE_UF_mean+4*0.0795, input$k_UE_UF_mean, 0.0795)
+           k_UE_UF_val <- rtruncnorm(input$num_ind, a = input$k_UE_UF_min, b = input$k_UE_UF_max, input$k_UE_UF_mean, input$k_UE_UF_sd)
          } else {
            k_UE_UF_val <- input$k_UE_UF_mean
          }
          
          # Create vector of k_UE_UM 
          if(input$num_ind > 1) {
-           k_UE_UM_val <- rtruncnorm(input$num_ind, a = 0.001, b = input$k_UE_UM_mean+4*0.0539, input$k_UE_UM_mean, 0.0539)
+           k_UE_UM_val <- rtruncnorm(input$num_ind, a = input$k_UE_UM_min, b = input$k_UE_UM_max, input$k_UE_UM_mean, input$k_UE_UM_sd)
          } else {
            k_UE_UM_val <- input$k_UE_UM_mean
          }
          
          # Create vector of k_UM_UE 
          if(input$num_ind > 1) {
-           k_UM_UE_val <- rtruncnorm(input$num_ind, a = 0.001, b = input$k_UM_UE_mean+4*0.0677, input$k_UM_UE_mean, 0.0677)
+           k_UM_UE_val <- rtruncnorm(input$num_ind, a = input$k_UM_UE_min, b = input$k_UM_UE_max, input$k_UM_UE_mean, input$k_UM_UE_sd)
          } else {
            k_UM_UE_val <- input$k_UM_UE_mean
          }
          
          # Create vector of k_UM_TtoB 
          if(input$num_ind > 1) {
-           k_UM_TtoB_val <- rtruncnorm(input$num_ind, a = 0.001, b = input$k_UM_TtoB_mean+4*0.0493, input$k_UM_TtoB_mean, 0.0493)
+           k_UM_TtoB_val <- rtruncnorm(input$num_ind, a = input$k_UM_TtoB_min, b = input$k_UM_TtoB_max, input$k_UM_TtoB_mean, input$k_UM_TtoB_sd)
          } else {
            k_UM_TtoB_val <- input$k_UM_TtoB_mean
          }
          
          # Create vector of uterine blood flow
          if(input$num_ind > 1) {
-           Q_VS_val <- rtruncnorm(input$num_ind, a = 1, b = 50, 2.44, 6.94)
+           Q_VS_val <- rtruncnorm(input$num_ind, a = input$Q_VS_min, b = input$Q_VS_max, input$Q_VS_mean, input$Q_VS_sd)
          } else {
-           Q_VS_val <- 2.44
+           Q_VS_val <- input$Q_VS_mean
          }
          
          # Create vector of uterine volume
          if(input$num_ind > 1) {
-           F_Uterus_val <- rtruncnorm(input$num_ind, a = 3.25E-4, b = 0.021, 1.38E-3, 6.12E-4)
+           F_Uterus_val <- rtruncnorm(input$num_ind, a = input$F_Uterus_min, b = input$F_Uterus_max, input$F_Uterus_mean, input$F_Uterus_sd)
          } else {
-           F_Uterus_val <- 1.38E-3
+           F_Uterus_val <- input$F_Uterus_mean
          }
          
          # Create vector of luminal cl
          if(input$num_ind > 1) {
-           CL_L_val <- rtruncnorm(input$num_ind, a = 1E-6, b = 0.01, 2.5e-5, 1E-5)
+           CL_L_val <- rtruncnorm(input$num_ind, a = input$CL_L_min, b = input$CL_L_max, input$CL_L_mean, input$CL_L_sd)
          } else {
-           CL_L_val <- 2.5e-5
+           CL_L_val <- input$CL_L_mean
          }
          
          # Create vector of hepatic cl
          if(input$num_ind > 1) {
-           CL_H_val <- rtruncnorm(input$num_ind, a = 0.1, b = 67.62, input$CL_H_mean, 0.46)
+           CL_H_val <- rtruncnorm(input$num_ind, a = input$CL_H_min, b = input$CL_H_max, input$CL_H_mean, input$CL_H_sd)
          } else {
            CL_H_val <- input$CL_H_mean
          }
@@ -1135,12 +1903,89 @@ server <- function(input, output,session) {
          
          #print(func_list)
 
-         # Set the rates for any release functions not selected to zero
-         init_rates[!(names(init_rates) %in% func_list)] = 0
-         
-         
-         
-         # Create set of start times
+        selected_rate_names <- unlist(func_list, use.names = FALSE)
+        
+        # Set the rates for any release functions not selected to zero
+        init_rates[!(names(init_rates) %in% selected_rate_names)] = 0
+        
+        
+        phase_count <- as.integer(input$input_phases)
+        active_phases <- seq_len(phase_count)
+        selected_rate_messages <- vapply(active_phases, function(phase_index) {
+          rate_name <- selected_rate_names[phase_index]
+          rate_value <- suppressWarnings(as.numeric(init_rates[[rate_name]][1]))
+          if(length(rate_value) == 1 && is.finite(rate_value) && rate_value > 0) {
+            return(NA_character_)
+          }
+          paste0("Phase ", phase_index, " ", input[[paste0("input_type_", phase_index)]],
+                 " rate must be greater than zero.")
+        }, character(1))
+        active_fraction_values <- c(input$frac_1, input$frac_2, input$frac_3)[active_phases]
+        duration_values <- c(param_converted$dur_1, param_converted$dur_2, param_converted$dur_3)
+        lag_values <- c(param_converted$tlag_1, param_converted$tlag_2, param_converted$tlag_3)
+        lag_enabled <- c(isTRUE(input$input_1_lag), isTRUE(input$input_2_lag), isTRUE(input$input_3_lag))
+        selected_removal_phase <- suppressWarnings(as.integer(input$removal_phase))
+        if(length(selected_removal_phase) == 0 || is.na(selected_removal_phase)) {
+          selected_removal_phase <- phase_count
+        }
+        
+        validate(
+          need(sum(active_fraction_values, na.rm=TRUE) <= 1,
+               "Active input phase fractions must sum to 1.00 or less."),
+          need(!any(!is.na(selected_rate_messages)),
+               paste(stats::na.omit(selected_rate_messages), collapse = " ")),
+          need(all(duration_values[active_phases] > 0), "Active input phase durations must be greater than zero."),
+          need(!isTRUE(input$strict_dur) || selected_removal_phase %in% active_phases,
+               "Dose removal phase must be one of the active input phases.")
+        )
+        
+        if(input$input_seq == "Sequential"){
+          phase_start_times <- c(0, duration_values[1], duration_values[1] + duration_values[2])
+          phase_end_times <- cumsum(duration_values)
+        } else {
+          phase_start_times <- c(0, 0, 0)
+          phase_end_times <- duration_values
+        }
+        
+        release_start_times <- phase_start_times + ifelse(lag_enabled, lag_values, 0)
+        removal_time <- phase_end_times[selected_removal_phase]
+        simulated_phases <- active_phases
+        if(isTRUE(input$strict_dur)) {
+          simulated_phases <- active_phases[active_phases <= selected_removal_phase]
+        }
+        schedule_end_time <- if(isTRUE(input$strict_dur)) {
+          removal_time
+        } else {
+          max(phase_end_times[active_phases])
+        }
+        
+        validate(
+          need(all(release_start_times[simulated_phases] < phase_end_times[simulated_phases]),
+               "Lag time must be shorter than the available release duration for each simulated phase."),
+          need(!isTRUE(input$strict_dur) || all(release_start_times[simulated_phases] < removal_time),
+               "Lag time places a simulated phase start at or after the selected dose removal time."),
+          need(input$num_dose <= 1 || input$II >= schedule_end_time,
+               paste0("Inter-dose interval must be at least ",
+                      round(schedule_end_time, 2),
+                      " hours to avoid overlapping multiphase dose schedules."))
+        )
+        
+        zero_phase_rates <- function(phase_data, phase_num) {
+          phase_data[[paste0("ZO", phase_num)]] <- 0
+          phase_data[[paste0("FO", phase_num)]] <- 0
+          phase_data[[paste0("SQ", phase_num)]] <- 0
+          return(phase_data)
+        }
+        
+        zero_all_rates <- function(phase_data) {
+          phase_data <- phase_data %>%
+            mutate(ZO1 = 0, FO1 = 0, SQ1 = 0,
+                   ZO2 = 0, FO2 = 0, SQ2 = 0,
+                   ZO3 = 0, FO3 = 0, SQ3 = 0)
+          return(phase_data)
+        }
+        
+        # Create set of start times
          start_1 <- data.frame(ID=ID_vals, time=0, addl=addl_vals, ii=ii_vals,
                                amt=param_converted$dose*input$dose_F*input$frac_1, cmt=dose_cmt, evid=1, phase=1,
                                weight = weight_vals, k_UE_UF = k_UE_UF_val, k_UE_UM = k_UE_UM_val,k_UM_UE = k_UM_UE_val, k_UM_TtoB = k_UM_TtoB_val, F_Uterus = F_Uterus_val, Q_VS = Q_VS_val, CL_L = CL_L_val, CL_H = CL_H_val
@@ -1168,52 +2013,52 @@ server <- function(input, output,session) {
          
          
          
-         # Set up lag times
-         lag1 <- param_converted$tlag_1
-         lag2 <- param_converted$tlag_2
-         lag3 <- param_converted$tlag_3
-         
          if(input$input_seq == "Sequential"){
            start_1 <- start_1 %>% mutate(ZO2=0, FO2=0, SQ2=0, ZO3=0, FO3=0, SQ3=0)
-           start_2$time <- start_1$time + param_converted$dur_1
+          start_2$time <- phase_start_times[2]
            start_2 <- start_2 %>% mutate(ZO1=0, FO1=0, SQ1=0, ZO3=0, FO3=0, SQ3=0)
-           start_3$time <- start_2$time + param_converted$dur_2
+          start_3$time <- phase_start_times[3]
            start_3 <- start_3 %>% mutate(ZO1=0, FO1=0, SQ1=0, ZO2=0, FO2=0, SQ2=0)
          }
          
-         end_1 <- start_1 %>%
-           mutate(time=time + param_converted$dur_1, amt=0, evid=8)
-         end_2 <- start_2 %>%
-           mutate(time=time + param_converted$dur_2, amt=0, evid=8)
-         end_3 <- start_3 %>%
-           mutate(time=time + param_converted$dur_3, amt=0, evid=8)
-         
-         lagged_1 <- start_1 %>%
-           mutate(time =  time + lag1)
-         lagged_2 <- start_2 %>%
-           mutate(time =  time + lag2)
-         lagged_3 <- start_3 %>%
-           mutate(time =  time + lag3)
+        start_1$time <- release_start_times[1]
+        start_2$time <- release_start_times[2]
+        start_3$time <- release_start_times[3]
+        
+        make_phase_end <- function(start_data, phase_num) {
+          end_data <- start_data %>%
+            filter(cmt == 23 + phase_num) %>%
+            mutate(time = phase_end_times[phase_num],
+                   amt = 0,
+                   evid = 8)
+          end_data <- zero_phase_rates(end_data, phase_num)
+          return(end_data)
+        }
+        
+        make_lag_off <- function(start_data, phase_num) {
+          lag_off <- start_data %>%
+            filter(cmt == 23 + phase_num) %>%
+            mutate(time = phase_start_times[phase_num],
+                   amt = 0,
+                   evid = 8)
+          lag_off <- zero_phase_rates(lag_off, phase_num)
+          return(lag_off)
+        }
+        
+        end_1 <- make_phase_end(start_1, 1)
+        end_2 <- make_phase_end(start_2, 2)
+        end_3 <- make_phase_end(start_3, 3)
          
          
          
          if(input$input_1_lag) {
-           start_1 <- lagged_1 %>%
-             add_row(ID=ID_vals, time=0, addl=addl_vals, ii=ii_vals, amt=0, cmt=dose_cmt, evid=8, phase=2,
-                     weight = weight_vals,k_UE_UF = k_UE_UF_val, k_UE_UM = k_UE_UM_val ,k_UM_UE = k_UM_UE_val, k_UM_TtoB = k_UM_TtoB_val, F_Uterus = F_Uterus_val, Q_VS = Q_VS_val, CL_L = CL_L_val, CL_H = CL_H_val,
-                     ZO1=0, FO1=0, SQ1=0)
+          start_1 <- rbind(make_lag_off(start_1, 1), start_1)
          }
          if(input$input_2_lag) {
-           start_2 <- lagged_2 %>%
-             add_row(ID=ID_vals, time=0, addl=addl_vals, ii=ii_vals, amt=0, cmt=dose_cmt, evid=8, phase=2,
-                     weight = weight_vals,k_UE_UF = k_UE_UF_val, k_UE_UM = k_UE_UM_val ,k_UM_UE = k_UM_UE_val, k_UM_TtoB = k_UM_TtoB_val, F_Uterus = F_Uterus_val, Q_VS = Q_VS_val, CL_L = CL_L_val, CL_H = CL_H_val,
-                     ZO2=0, FO2=0, SQ2=0)
+          start_2 <- rbind(make_lag_off(start_2, 2), start_2)
          }
          if(input$input_3_lag) {
-           start_3 <- lagged_3 %>%
-             add_row(ID=ID_vals, time=0, addl=addl_vals, ii=ii_vals, amt=0, cmt=dose_cmt, evid=8, phase=3,
-                     weight = weight_vals,k_UE_UF = k_UE_UF_val, k_UE_UM = k_UE_UM_val ,k_UM_UE = k_UM_UE_val, k_UM_TtoB = k_UM_TtoB_val, F_Uterus = F_Uterus_val, Q_VS = Q_VS_val, CL_L = CL_L_val, CL_H = CL_H_val,
-                     ZO3=0, FO3=0, SQ3=0)
+          start_3 <- rbind(make_lag_off(start_3, 3), start_3)
          }
          
          
@@ -1236,26 +2081,34 @@ server <- function(input, output,session) {
          #   rbind(input_prelim)
          
          
-         #input_set <- full_join(input_prelim, func_set, by=c("ID","time","evid", "phase"))
-         input_set <- rbind(start_1, start_2, start_3)
+       #input_set <- full_join(input_prelim, func_set, by=c("ID","time","evid", "phase"))
+       input_set <- rbind(start_1, start_2, start_3, end_1, end_2, end_3)
 
          
          if(input$strict_dur==TRUE){
-           end_dose <- end_1 %>%
-             mutate(ZO1 = 0, FO1 = 0, SQ1 = 0,
-                    ZO2 = 0, FO2 = 0, SQ2 = 0,
-                    ZO3 = 0, FO3 = 0, SQ3 = 0)
+          end_dose <- start_1 %>%
+            filter(cmt == dose_cmt) %>%
+            mutate(time = removal_time,
+                   amt = 0,
+                   evid = 8,
+                   phase = selected_removal_phase)
+          end_dose <- zero_all_rates(end_dose)
            
            #input_set <- left_join(input_set, end_dose, by=c("ID", "time", "cmt", "evid"))
            input_set <- rbind(input_set, end_dose) #, all.x=TRUE, all.y=TRUE)
          } 
+        
+        input_set <- bind_rows(lapply(dose_times, function(dose_time) {
+          input_set %>%
+            mutate(time = time + dose_time)
+        }))
          
          
          #input_set <- left_join(input_set, weight_comb, by="ID")
          
          input_set[is.na(input_set)] <- 0
          input_set <-input_set %>%
-           filter(phase <= input$input_phases) %>%
+          filter(phase %in% simulated_phases) %>%
            arrange(ID,time,phase)
          
          
@@ -1293,6 +2146,16 @@ server <- function(input, output,session) {
     
     # * 6.1 Input Phases ----
     observeEvent(input$input_phases, {
+      phase_count <- as.integer(input$input_phases)
+      removal_choices <- setNames(as.character(seq_len(phase_count)), paste("Phase", seq_len(phase_count)))
+      current_removal_phase <- suppressWarnings(as.integer(isolate(input$removal_phase)))
+      if(length(current_removal_phase) == 0 || is.na(current_removal_phase) || current_removal_phase > phase_count) {
+        current_removal_phase <- phase_count
+      }
+      updateSelectInput(session, "removal_phase",
+                        choices = removal_choices,
+                        selected = as.character(current_removal_phase))
+      
       if(input$input_phases==1) {
         disable("phase_2_options")
         disable("phase_3_options")
@@ -1339,6 +2202,14 @@ server <- function(input, output,session) {
       
     })
     
+    observeEvent(input$strict_dur, {
+      if(isTRUE(input$strict_dur)) {
+        enable("removal_phase")
+      } else {
+        disable("removal_phase")
+      }
+    }, ignoreInit = FALSE)
+    
     
     # * 6.2 Administration Route ----
     observeEvent(input$admin_route, {
@@ -1349,6 +2220,20 @@ server <- function(input, output,session) {
       else {
         enable("dose_type")
       }
+    })
+    
+    observe({
+      shiny::req(input$admin_route, input$input_phases)
+      phase_count <- as.integer(input$input_phases)
+      active_input_types <- vapply(seq_len(phase_count), function(phase_index) {
+        input_type <- input[[paste0("input_type_", phase_index)]]
+        if (is.null(input_type)) "" else input_type
+      }, character(1))
+      
+      toggle(
+        id = "release_function_dose_warning",
+        condition = any(active_input_types %in% c("Zero-Order", "Higuchi"))
+      )
     })
     
     # Ensure that only the selected input function is being sent to the simulator
@@ -1588,11 +2473,50 @@ server <- function(input, output,session) {
 #    })
 #   
     # * 6.7 Population ----
+    mirroredNumericValuesEqual <- function(x, y) {
+      if (is.null(x) || is.null(y)) {
+        return(FALSE)
+      }
+      if (is.na(x) && is.na(y)) {
+        return(TRUE)
+      }
+      isTRUE(all.equal(as.numeric(x), as.numeric(y), tolerance = sqrt(.Machine$double.eps)))
+    }
+    
+    syncMirroredMeanInput <- function(population_id, parameter_block_id) {
+      observeEvent(input[[population_id]], {
+        if (!mirroredNumericValuesEqual(input[[population_id]], input[[parameter_block_id]])) {
+          updateNumericInput(session, parameter_block_id, value = input[[population_id]])
+        }
+      }, ignoreInit = FALSE)
+      
+      observeEvent(input[[parameter_block_id]], {
+        if (!mirroredNumericValuesEqual(input[[parameter_block_id]], input[[population_id]])) {
+          updateNumericInput(session, population_id, value = input[[parameter_block_id]])
+        }
+      }, ignoreInit = TRUE)
+    }
+    
+    syncMirroredMeanInput("k_UE_UF_mean", "k_UE_UF_mean_uterine")
+    syncMirroredMeanInput("k_UE_UM_mean", "k_UE_UM_mean_uterine")
+    syncMirroredMeanInput("k_UM_UE_mean", "k_UM_UE_mean_uterine")
+    syncMirroredMeanInput("k_UM_TtoB_mean", "k_UM_TtoB_mean_uterine")
+    syncMirroredMeanInput("CL_L_mean", "CL_L_mean_clearance")
+    syncMirroredMeanInput("CL_H_mean", "CL_H_mean_clearance")
+    
     # Round number of individuals to the nearest integer
     observeEvent(input$num_ind, {
       shiny::req(input$num_ind)
       if(input$num_ind != floor(input$num_ind)){
         updateNumericInput(session, "num_ind", value=round(input$num_ind,0))
+      }
+    })
+    
+    # Round population seed to the nearest integer for reproducible random sampling
+    observeEvent(input$pop_seed, {
+      shiny::req(input$pop_seed)
+      if(input$pop_seed != floor(input$pop_seed)){
+        updateNumericInput(session, "pop_seed", value=round(input$pop_seed,0))
       }
     })
 
@@ -1724,7 +2648,7 @@ server <- function(input, output,session) {
                                     bsTooltip("n_tHalf_1", "Percent remaining to be released after n half-lives = 100/(2^n)")),
                
                # UI elements for Higuchi function
-               "Higuchi" = span(column(col_width, numericInput("sqrt_rate_1",HTML(paste0("Higuchi (Suare-Root Time) Constant (\U00B5g/",t_unit_singular,")",tags$sup("1/2"),")")),
+               "Higuchi" = span(column(col_width, numericInput("sqrt_rate_1",HTML(paste0("Higuchi (Square-Root Time) Constant (\U00B5g/",t_unit_singular,")",tags$sup("1/2"),")")),
                                                                min=0,value=0,step=0.1),
                                 checkboxInput("sqrt_calc_1", "Calculate from Duration", value=FALSE)),
                                 bsTooltip("sqrt_calc_1", HTML(paste0("Higuchi constant is calculated as (Dose*F*Phase 1 Fraction) / (Duration",tags$sup("1/2"),")"))))
@@ -1771,7 +2695,7 @@ server <- function(input, output,session) {
                                     column(col_width, numericInput("n_tHalf_2", "Number of Absorption Half-Lives", min=0, value=8)),
                                     bsTooltip("fo_calc_2", "First-Order rate constant is calculated as 1/ln(2) * Duration/Number of Half-Lives"),
                                     bsTooltip("n_tHalf_2", "Percent remaining to be released after n half-lives = 100/(2^n)")),
-               "Higuchi" = span(column(col_width, numericInput("sqrt_rate_2",HTML(paste0("Higuchi (Suare-Root Time) Constant (\U00B5g/",t_unit_singular,")",tags$sup("1/2"),")")),
+               "Higuchi" = span(column(col_width, numericInput("sqrt_rate_2",HTML(paste0("Higuchi (Square-Root Time) Constant (\U00B5g/",t_unit_singular,")",tags$sup("1/2"),")")),
                                                                min=0,value=0,step=0.1),
                                        checkboxInput("sqrt_calc_2", "Calculate from Duration", value=FALSE)),
                                 bsTooltip("sqrt_calc_2", HTML(paste0("Higuchi constant is calculated as (Dose*F*Phase 2 Fraction) / (Duration",tags$sup("1/2"),")"))))
@@ -1809,12 +2733,12 @@ server <- function(input, output,session) {
                "Zero-Order" = span(column(col_width, numericInput("zo_rate_3", paste0("Zero-Order Rate (\U00B5g/",t_unit_singular,")"), min=0,value=0,step=0.1),
                                           checkboxInput("zo_calc_3", "Calculate from Duration", value=FALSE)),
                                    bsTooltip("zo_calc_3", "Zero-Order rate is calculated as (Dose*F*Phase 3 Fraction) / Duration")),
-               "First-Order" = span(column(col_width, numericInput("fo_rate_2", paste0("First-Order Rate Constant (1/",t_unit,")"), min=0,value=0,step=0.1),
+               "First-Order" = span(column(col_width, numericInput("fo_rate_3", paste0("First-Order Rate Constant (1/",t_unit,")"), min=0,value=0,step=0.1),
                                            checkboxInput("fo_calc_3", "Calculate from Duration", value=FALSE)),
                                     column(col_width, numericInput("n_tHalf_3", "Number of Absorption  Half-Lives", min=0, value=8)),
                                     bsTooltip("fo_calc_3", "First-Order rate constant is calculated as 1/ln(2) * Duration/Number of Half-Lives"),
                                     bsTooltip("n_tHalf_3", "Percent remaining to be released after n half-lives = 100/(2^n)")),
-               "Higuchi" = span(column(col_width, numericInput("sqrt_rate_3",HTML(paste0("Higuchi (Suare-Root Time) Constant (\U00B5g/",t_unit_singular,")",tags$sup("1/2"),")")),
+               "Higuchi" = span(column(col_width, numericInput("sqrt_rate_3",HTML(paste0("Higuchi (Square-Root Time) Constant (\U00B5g/",t_unit_singular,")",tags$sup("1/2"),")")),
                                                                min=0,value=0,step=0.1),
                                        checkboxInput("sqrt_calc_3", "Calculate from Duration", value=FALSE)),
                                 bsTooltip("sqrt_calc_3", HTML(paste0("Higuchi constant is calculated as (Dose*F*Phase 3 Fraction) / (Duration",tags$sup("1/2"),")"))))
@@ -1841,7 +2765,7 @@ server <- function(input, output,session) {
       if(input$auto_sliders != TRUE) {
         showModal(modalDialog(
           title= "Warning!",
-          "The simulation will not run if the sum of the dose fractions does not equal 1.00"
+          "The simulation will not run if the sum of the active dose fractions is greater than 1.00."
           )
         )
       } else if(input$auto_sliders == TRUE) {
@@ -1883,6 +2807,31 @@ server <- function(input, output,session) {
       slider_2$cur <- input$frac_2
       slider_3$prev <- slider_3$cur
       slider_3$cur <- input$frac_3
+      active_frac_values <- c(slider_1$cur, slider_2$cur, slider_3$cur)[seq_len(as.integer(input$input_phases))]
+      active_frac_total <- sum(active_frac_values, na.rm=TRUE)
+      
+      if(active_frac_total <= 1) {
+        return()
+      }
+      
+      if(slider_1$prev != slider_1$cur) {
+        slider_1$cur <- max(0, slider_1$cur - (active_frac_total - 1))
+        slider_1$prev <- slider_1$cur
+        updateSliderInput(session, "frac_1", value=slider_1$cur)
+        return()
+      }
+      if(slider_2$prev != slider_2$cur) {
+        slider_2$cur <- max(0, slider_2$cur - (active_frac_total - 1))
+        slider_2$prev <- slider_2$cur
+        updateSliderInput(session, "frac_2", value=slider_2$cur)
+        return()
+      }
+      if(slider_3$prev != slider_3$cur) {
+        slider_3$cur <- max(0, slider_3$cur - (active_frac_total - 1))
+        slider_3$prev <- slider_3$cur
+        updateSliderInput(session, "frac_3", value=slider_3$cur)
+        return()
+      }
       
       
     # * 9.1 Slider 1 ----
@@ -2641,10 +3590,11 @@ server <- function(input, output,session) {
           }
         
 
+        user_obs <- user_obs_for_plot("Lumen")
         panelPlots_C_totLUMEN(simResults, yData_total, yData_solution, yData_unbound, yData_bound, yData_precip, xLabel, yLabel, CMT,
                               total = input$lumen_total, solution = input$lumen_solution, unbound = input$lumen_unbound, bound = input$lumen_bound, precip = input$lumen_precip,
                               logScale=input$log_Lumen, CHIC_COC=input$CHIC_cvl_COC, CHIC_IUD=input$CHIC_cvl_IUD,
-                              xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                              xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
     })
 
     
@@ -2672,8 +3622,9 @@ server <- function(input, output,session) {
           y_max = input$y_max2
         }
         
+        user_obs <- user_obs_for_plot("Epi")
         panelPlots_C_tissue(simResults, yData, xLabel, yLabel, CMT, logScale=input$log_Epi,
-                            xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                            xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
     })
     
     # * 12.3 Vaginal Stroma ----
@@ -2700,8 +3651,9 @@ server <- function(input, output,session) {
           y_max = input$y_max3
         }
         
+        user_obs <- user_obs_for_plot("Stroma")
         panelPlots_C_tissue(simResults, yData, xLabel, yLabel, CMT, logScale=input$log_Stroma,
-                            xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                            xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
         
     })
     
@@ -2730,13 +3682,16 @@ server <- function(input, output,session) {
           y_max = input$y_max4
         }
         
+        user_obs <- user_obs_for_plot("Plasma")
         panelPlots_plasma (simResults, yData, xLabel, yLabel, CMT,
                            logScale=input$log_Plasma,
                            selector=input$Plasma_selector,
                            errorBars=input$Plasma_error,
                            xmin=x_min, xmax=x_max,
                            ymin=y_min, ymax=y_max,
-                           num_ind = input$num_ind)
+                           num_ind = input$num_ind,
+                           user_obs = user_obs,
+                           fitRange = input$fit_plot4)
     })
     
     # * 12.5 Cervical Fluid ----
@@ -2763,8 +3718,9 @@ server <- function(input, output,session) {
         y_max = input$y_max5
       }
       
+      user_obs <- user_obs_for_plot("CF")
       panelPlots_CF (simResults, yData, xLabel, yLabel, CMT, logScale=input$log_CF,
-                     xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                     xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
       
     })
     
@@ -2792,8 +3748,9 @@ server <- function(input, output,session) {
         y_max = input$y_max6
       }
       
+      user_obs <- user_obs_for_plot("CE")
       panelPlots_C_Epi (simResults, yData, xLabel, yLabel, CMT, logScale=input$log_CE,
-                        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
       
     })
     
@@ -2822,8 +3779,9 @@ server <- function(input, output,session) {
         y_max = input$y_max7
       }
       
+      user_obs <- user_obs_for_plot("CM")
       panelPlots_C_Myo (simResults, yData, xLabel, yLabel, CMT, logScale=input$log_CM,
-                        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
       
     })
     
@@ -2851,8 +3809,9 @@ server <- function(input, output,session) {
         y_max = input$y_max8
       }
       
+      user_obs <- user_obs_for_plot("UF")
       panelPlots_UF (simResults, yData, xLabel, yLabel, CMT, logScale=input$log_UF, 
-                     xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                     xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind, user_obs = user_obs)
       
     })
     
@@ -2880,10 +3839,12 @@ server <- function(input, output,session) {
         y_max = input$y_max9
       }
       
+      user_obs <- user_obs_for_plot("UE")
       panelPlots_U_Endo (simResults, yData, xLabel, yLabel, CMT,logScale=input$log_UE, errorBars=input$UE_error,
                          Nilsson_IUD=input$Nilsson_IUD_Endo, Nilsson_Oral=input$Nilsson_Oral_Endo,
                          Devoto_Oral=input$Devoto_Oral_Endo, Devoto_Vaginal=input$Devoto_Vaginal_Endo,
-                         xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                         xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind,
+                         user_obs = user_obs, fitRange = input$fit_plot9)
       
     })
     
@@ -2911,9 +3872,11 @@ server <- function(input, output,session) {
         y_max = input$y_max10
       }
       
+      user_obs <- user_obs_for_plot("UM")
       panelPlots_U_Myo (simResults, yData, xLabel, yLabel, CMT, logScale=input$log_UM, errorBars=input$UM_error,
                         Nilsson_IUD=input$Nilsson_IUD_Myo, Nilsson_Oral=input$Nilsson_Oral_Myo,
-                        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind)
+                        xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max, num_ind = input$num_ind,
+                        user_obs = user_obs, fitRange = input$fit_plot10)
       
     })
     
@@ -2997,6 +3960,7 @@ server <- function(input, output,session) {
     
     observeEvent(input$resetParams, {
       reset("params")
+      delay(100, updateSelectInput(session, "study", selected = ""))
     })
     
     # * 12.13 Mass Balance Check ----
@@ -3043,16 +4007,104 @@ server <- function(input, output,session) {
       }
     })
     
+    user_defined_missing_inputs <- function() {
+      phase_count <- suppressWarnings(as.integer(input$input_phases))
+      if(length(phase_count) == 0 || is.na(phase_count)) {
+        return("Please select the number of input phases.")
+      }
+      
+      required_inputs <- list(
+        "dose" = input$dose_total,
+        "number of doses" = input$num_dose,
+        "simulation time" = input$SimTime
+      )
+      
+      if(!is.null(input$num_dose) && !is.na(input$num_dose) && input$num_dose > 1) {
+        required_inputs[["inter-dose interval"]] <- input$II
+      }
+      
+      for (i in seq_len(phase_count)) {
+        required_inputs[[paste0("phase ", i, " duration")]] <- input[[paste0("dur_", i)]]
+        rate_input <- switch(input[[paste0("input_type_", i)]],
+                             "Zero-Order" = paste0("zo_rate_", i),
+                             "First-Order" = paste0("fo_rate_", i),
+                             "Higuchi" = paste0("sqrt_rate_", i))
+        required_inputs[[paste0("phase ", i, " release rate")]] <- input[[rate_input]]
+      }
+      
+      missing_labels <- names(required_inputs)[vapply(required_inputs, function(value) {
+        is.null(value) || length(value) == 0 || is.na(value)
+      }, logical(1))]
+      
+      if(length(missing_labels) > 0) {
+        return(paste0("Please provide: ", paste(missing_labels, collapse = ", "), "."))
+      }
+      
+      NULL
+    }
+    
+    observe({
+      if(isTRUE(input$study == "User_Defined") && !isTRUE(userDefinedReady())) {
+        hide("simulation_output_tabs")
+        show("user_defined_prompt")
+      } else {
+        hide("user_defined_prompt")
+        show("simulation_output_tabs")
+      }
+    })
+    
+    observeEvent(input$runSim, {
+      if(isTRUE(input$study == "User_Defined")) {
+        missing_message <- user_defined_missing_inputs()
+        if(is.null(missing_message)) {
+          userDefinedReady(TRUE)
+        } else {
+          userDefinedReady(FALSE)
+          userDefinedPrompt(missing_message)
+        }
+      }
+    })
+    
     
 
 
 # 14. Vignettes ---------------------------------------------------------------
   
   # * 14.1 Nilsson 1982 Oral ----
-  observe({
-    studyVignette <- input$study
-    reset("Dosing Options")
+  applyStudyVignette <- function(studyVignette) {
+    if(is.null(studyVignette) || studyVignette=="") {
+      return(invisible(NULL))
+    }
+    
+    if(studyVignette=="User_Defined") {
+      userDefinedReady(FALSE)
+      userDefinedPrompt("Please provide your input, then click Run Simulation.")
+      updateRadioButtons(session, "admin_route", selected="Uterine")
+      updateRadioButtons(session, "input_phases", selected="1")
+      updateSelectInput(session, "input_type_1", selected="Zero-Order")
+      updateRadioButtons(session, "input_1_scale", selected="Days")
+      updateNumericInput(session, "dose_total", value=30)
+      updateNumericInput(session, "num_dose", value=1)
+      updateNumericInput(session, "II", value=24)
+      updateNumericInput(session, "SimTime", value=7)
+      updateCheckboxInput(session, "calc_dur_1", value=FALSE)
+      updateCheckboxInput(session, "strict_dur", value=FALSE)
+      updateNumericInput(session, "dur_1", value=30*1000/20)
+      delay(300, {
+        updateNumericInput(session, "zo_rate_1", value=20)
+        updateCheckboxInput(session, "calc_dur_1", value=TRUE)
+        updateNumericInput(session, "dur_1", value=30*1000/20)
+      })
+      updateSelectInput(session, "Plasma_selector", selected=character(0))
+      updateCheckboxInput(session, "Nilsson_IUD_Endo", value = 0)
+      updateCheckboxInput(session, "Nilsson_Oral_Endo", value = 0)
+      updateCheckboxInput(session, "Nilsson_IUD_Myo", value = 0)
+      updateCheckboxInput(session, "Nilsson_Oral_Myo", value = 0)
+      return(invisible(NULL))
+    }
+    
     if(studyVignette=="Nilsson_Oral") {
+      userDefinedReady(TRUE)
       updateRadioButtons(session, "admin_route", selected="Oral")
       updateRadioButtons(session, "input_phases", selected="1")
       updateSelectInput(session, "input_type_1", selected="First-Order")
@@ -3061,25 +4113,32 @@ server <- function(input, output,session) {
       updateNumericInput(session, "num_dose", value=7)
       updateNumericInput(session, "SimTime", value=9)
       updateRadioButtons(session, "input_1_scale", selected="Hours")
-      delay(200,updateNumericInput(session, "fo_rate_1", value=0.75))
+      updateCheckboxInput(session, "calc_dur_1", value=FALSE)
+      updateCheckboxInput(session, "strict_dur", value=FALSE)
+      delay(300, {
+        updateNumericInput(session, "dur_1", value=8*log(2)/0.75)
+        updateNumericInput(session, "fo_rate_1", value=0.75)
+      })
       updateTabsetPanel(session, "outputTabset", selected="Plasma")
       updateSelectInput(session, "Plasma_selector", selected="Nilsson_Oral")
-      updateCheckboxInput(session, "log_plasma", value=0)
+      updateCheckboxInput(session, "log_Plasma", value=0)
       updateCheckboxInput(session, "Nilsson_Oral_Endo", value = 1)
       updateCheckboxInput(session, "Nilsson_Oral_Myo", value = 1)
-      updateNumericInput(session, "fit_plot4",  value=0)
-      updateNumericInput(session, "fit_plot9", value=0)
-      updateNumericInput(session, "fit_plot10", value=0)
+      updateCheckboxInput(session, "fit_plot4", value=1)
+      updateCheckboxInput(session, "fit_plot9", value=1)
+      updateCheckboxInput(session, "fit_plot10", value=1)
       updateNumericInput(session, "x_max4",  value=10)
       updateNumericInput(session, "y_max4",  value=0.0005)
       updateNumericInput(session, "x_max9",  value=10)
       updateNumericInput(session, "y_max9",  value=0.006)
       updateNumericInput(session, "x_max10",  value=10)
       updateNumericInput(session, "y_max10",  value=0.0025)
+      delay(1000, click("runSim"))
     }
     
     # * 14.1 Nilsson 1982 IUD ----
     if(studyVignette=="Nilsson_IUD") {
+      userDefinedReady(TRUE)
       updateRadioButtons(session, "admin_route", selected="Uterine")
       updateRadioButtons(session, "input_phases", selected="1")
       updateSelectInput(session, "input_type_1", selected="Zero-Order")
@@ -3089,15 +4148,18 @@ server <- function(input, output,session) {
       updateNumericInput(session, "SimTime", value=60)
       updateRadioButtons(session, "input_1_scale", selected="Days")
       updateCheckboxInput(session, "calc_dur_1", value=FALSE)
-      delay(100,updateNumericInput(session, "zo_rate_1", value=30))
+      delay(300, {
+        updateNumericInput(session, "dur_1", value=50)
+        updateNumericInput(session, "zo_rate_1", value=30)
+      })
       updateTabsetPanel(session, "outputTabset", selected="UE")
       updateSelectInput(session, "Plasma_selector", selected="Nilsson_IUD")
-      updateCheckboxInput(session, "log_plasma", value=0)
+      updateCheckboxInput(session, "log_Plasma", value=0)
       updateCheckboxInput(session, "Nilsson_IUD_Endo", value = 1)
       updateCheckboxInput(session, "Nilsson_IUD_Myo", value = 1)
-      updateNumericInput(session, "fit_plot4",  value=0)
-      updateNumericInput(session, "fit_plot9", value=0)
-      updateNumericInput(session, "fit_plot10", value=0)
+      updateCheckboxInput(session, "fit_plot4", value=1)
+      updateCheckboxInput(session, "fit_plot9", value=1)
+      updateCheckboxInput(session, "fit_plot10", value=1)
       updateNumericInput(session, "x_max4",  value=60)
       updateNumericInput(session, "y_max4",  value=0.0005)
       updateNumericInput(session, "x_max9",  value=60)
@@ -3105,10 +4167,15 @@ server <- function(input, output,session) {
       updateNumericInput(session, "x_max10",  value=60)
       updateNumericInput(session, "y_max10",  value=0.0055)
       updateCheckboxInput(session, "strict_dur", value=TRUE)
-      delay(100, updateNumericInput(session, "dur_1", value=50))
+      delay(1000, click("runSim"))
     }
     
-  })
+    invisible(NULL)
+  }
+  
+  observeEvent(input$study, {
+    applyStudyVignette(input$study)
+  }, ignoreInit = FALSE)
     pmt <- reactive({
     param_converted <- list()
     for (i in 1:3){
@@ -3212,7 +4279,8 @@ server <- function(input, output,session) {
       P_Muscle = input$P_Muscle,
       P_Skin = input$P_Skin,
       #CL_L = input$CL_L
-      BP = input$BP
+      BP = input$BP,
+      population_seed = input$pop_seed
     )
     
     

@@ -176,11 +176,192 @@ Nilsson_1982_oral <- Nilsson_1982_oral %>% mutate(Plas_upper = Plas_mean_ng_L + 
 # Plots
 #===========================
 
+population_interval_col <- function(line_col = "black") {
+  if (line_col %in% c("black", "#000000")) {
+    return(adjustcolor("grey70", alpha.f = 0.45))
+  }
+  
+  adjustcolor(line_col, alpha.f = 0.18)
+}
+
+population_profile_summary <- function(simResults, yData) {
+  data.frame(time = simResults$time, y = yData) %>%
+    group_by(time) %>%
+    summarize(
+      med = median(y, na.rm = TRUE),
+      lower = quantile(y, 0.05, na.rm = TRUE),
+      upper = quantile(y, 0.95, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
+plot_simulated_profile <- function(simResults, yData, xRange_hrs, yRange, logScale, num_ind,
+                                   col = "black", lwd = 2, add = FALSE) {
+  log_arg <- if (isTRUE(logScale)) "y" else ""
+  
+  if (num_ind > 1) {
+    yData_summary <- population_profile_summary(simResults, yData)
+    
+    if (isTRUE(logScale)) {
+      yData_summary <- yData_summary %>%
+        mutate(
+          med = pmax(med, 1e-12),
+          lower = pmax(lower, 1e-12),
+          upper = pmax(upper, 1e-12)
+        )
+    }
+    
+    if (!add) {
+      plot(0, type = "n", xlim = xRange_hrs, ylim = yRange, ann = FALSE, axes = FALSE, log = log_arg)
+    }
+    
+    polygon(
+      c(yData_summary$time, rev(yData_summary$time)),
+      c(yData_summary$upper, rev(yData_summary$lower)),
+      col = population_interval_col(col),
+      border = NA
+    )
+    lines(yData_summary$time, yData_summary$med, lwd = lwd, col = col)
+  } else {
+    if (add) {
+      lines(simResults$time, yData, type = "l", lwd = lwd, col = col)
+    } else {
+      plot(simResults$time, yData, type = "l", lwd = lwd, xlim = xRange_hrs, ylim = yRange,
+           ann = FALSE, axes = FALSE, col = col, log = log_arg)
+    }
+  }
+}
+
+simulated_profile_legend <- function(num_ind) {
+  if (num_ind > 1) {
+    return(list(
+      labels = c("Median", "90% CI"),
+      col = c("black", population_interval_col()),
+      lty = c(1, NA),
+      pch = c(NA, 15)
+    ))
+  }
+  
+  list(
+    labels = c("Simulated"),
+    col = c("black"),
+    lty = c(1),
+    pch = c(NA)
+  )
+}
+
+plot_user_observations <- function(user_obs, legendLabels, legendCol, lineType, pointType,
+                                   errorBars = TRUE, logScale = FALSE, col = "firebrick") {
+  if (is.null(user_obs) || nrow(user_obs) == 0) {
+    return(list(labels = legendLabels, col = legendCol, lty = lineType, pch = pointType))
+  }
+  
+  obs <- user_obs[is.finite(user_obs$time_days) & is.finite(user_obs$conc_mg_L), , drop = FALSE]
+  if (isTRUE(logScale)) {
+    obs <- obs[obs$conc_mg_L > 0, , drop = FALSE]
+  }
+  if (nrow(obs) == 0) {
+    return(list(labels = legendLabels, col = legendCol, lty = lineType, pch = pointType))
+  }
+  
+  points(obs$time_days, obs$conc_mg_L, col = col, pch = 16, lwd = 2)
+  
+  if (isTRUE(errorBars) && all(c("lower_mg_L", "upper_mg_L") %in% names(obs))) {
+    obs_error <- obs[is.finite(obs$lower_mg_L) & is.finite(obs$upper_mg_L), , drop = FALSE]
+    if (isTRUE(logScale)) {
+      obs_error <- obs_error[obs_error$lower_mg_L > 0 & obs_error$upper_mg_L > 0, , drop = FALSE]
+    }
+    if (nrow(obs_error) > 0) {
+      arrows(x0 = obs_error$time_days, y0 = obs_error$lower_mg_L,
+             x1 = obs_error$time_days, y1 = obs_error$upper_mg_L,
+             code = 3, angle = 90, length = 0.05, col = col, lwd = 1)
+    }
+  }
+  
+  obs_label <- unique(obs$dataset)
+  obs_label <- obs_label[!is.na(obs_label) & obs_label != ""]
+  obs_label <- if (length(obs_label) == 1) obs_label else "Uploaded observations"
+  
+  list(
+    labels = c(legendLabels, obs_label),
+    col = c(legendCol, col),
+    lty = c(lineType, NA),
+    pch = c(pointType, 16)
+  )
+}
+
+range_with_user_observations <- function(ymin, ymax, user_obs = NULL, logScale = FALSE) {
+  y_values <- c(ymin, ymax)
+  
+  if (!is.null(user_obs) && nrow(user_obs) > 0) {
+    obs_values <- c(user_obs$conc_mg_L, user_obs$lower_mg_L, user_obs$upper_mg_L)
+    obs_values <- obs_values[is.finite(obs_values)]
+    if (isTRUE(logScale)) {
+      obs_values <- obs_values[obs_values > 0]
+    }
+    y_values <- c(y_values, obs_values)
+  }
+  
+  y_values <- y_values[is.finite(y_values)]
+  if (isTRUE(logScale)) {
+    y_values <- y_values[y_values > 0]
+  }
+  
+  if (length(y_values) == 0) {
+    return(c(1e-12, 1))
+  }
+  
+  y_min <- min(y_values, na.rm = TRUE)
+  y_max <- max(y_values, na.rm = TRUE)
+  
+  if (y_min == y_max) {
+    y_min <- y_min * 0.9
+    y_max <- y_max * 1.1
+  }
+  
+  c(max(y_min * 0.9, 1e-12), max(y_max * 1.1, 1e-12))
+}
+
+range_with_plot_observations <- function(xmin, xmax, ymin, ymax,
+                                         obs_x = NULL, obs_y = NULL,
+                                         user_obs = NULL, logScale = FALSE) {
+  x_values <- c(xmin, xmax, obs_x)
+  if (!is.null(user_obs) && nrow(user_obs) > 0) {
+    x_values <- c(x_values, user_obs$time_days)
+  }
+  x_values <- x_values[is.finite(x_values)]
+  x_range <- if (length(x_values) > 0) range(x_values, na.rm = TRUE) else c(0, 1)
+  
+  y_values <- c(ymin, ymax, obs_y)
+  if (!is.null(user_obs) && nrow(user_obs) > 0) {
+    y_values <- c(y_values, user_obs$conc_mg_L, user_obs$lower_mg_L, user_obs$upper_mg_L)
+  }
+  y_values <- y_values[is.finite(y_values)]
+  if (isTRUE(logScale)) {
+    y_values <- y_values[y_values > 0]
+  }
+  if (length(y_values) == 0) {
+    y_values <- c(1e-12, 1)
+  }
+  
+  y_min <- min(y_values, na.rm = TRUE)
+  y_max <- max(y_values, na.rm = TRUE)
+  if (y_min == y_max) {
+    y_min <- y_min * 0.9
+    y_max <- y_max * 1.1
+  }
+  
+  list(
+    x = x_range,
+    y = c(max(y_min * 0.9, 1e-12), max(y_max * 1.1, 1e-12))
+  )
+}
+
 ############# Vaginal Luminal Fluid ###################
 
 panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_unbound, yData_bound, yData_precip, xLabel, yLabel, CMT, 
                                  total, solution, unbound, bound, precip, logScale, CHIC_COC, CHIC_IUD, CHIC_SUB,
-                                 xmin, xmax, ymin, ymax, num_ind)
+                                 xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
     #options(scipen = 999)
     
@@ -218,29 +399,10 @@ panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_
     text(x=100, y=10, labels=as.character(max(allYdata,na.rm = TRUE)))
     
     ## Plot simulated results
+    plot_started <- FALSE
     if(total==1){
-      if(num_ind > 1) {
-        if(logScale == FALSE) {
-            plot(simResults$time[simResults$ID==1], yData_total[1:(length(yData_total)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, col = "black")
-            for (i in 2:max(simResults$ID)){
-              a<-(i-1)*(length(yData_total)/max(simResults$ID))+1
-              b<-i*(length(yData_total)/max(simResults$ID))
-              lines(simResults$time[simResults$ID==i], yData_total[a:b],lwd=2)
-            }
-          }
-        if(logScale == TRUE) {
-          plot(simResults$time, yData_total, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y", col = "black")
-        }
-      } else
-      {
-        if(logScale == 0) {
-          plot(simResults$time, yData_total, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, col = "black")
-        }
-        if(logScale == 1) {
-          plot(simResults$time, yData_total, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, col = "black", log = "y")
-
-        }
-      }
+      plot_simulated_profile(simResults, yData_total, xRange_hrs, yRange, logScale, num_ind, col = "black", add = plot_started)
+      plot_started <- TRUE
     }
 
     # 
@@ -248,19 +410,28 @@ panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_
    
 # 
     if (solution == 1) {
-      lines(simResults$time, yData_solution, type="l", lwd=2, col = "blue")
+      plot_simulated_profile(simResults, yData_solution, xRange_hrs, yRange, logScale, num_ind, col = "blue", add = plot_started)
+      plot_started <- TRUE
     }
 
     if (unbound == 1) {
-      lines(simResults$time, yData_unbound, type="l", lwd=2, col = "orange")
+      plot_simulated_profile(simResults, yData_unbound, xRange_hrs, yRange, logScale, num_ind, col = "orange", add = plot_started)
+      plot_started <- TRUE
     }
 
     if (bound == 1) {
-      lines(simResults$time, yData_bound, type="l", lwd=2, col = "green")
+      plot_simulated_profile(simResults, yData_bound, xRange_hrs, yRange, logScale, num_ind, col = "green", add = plot_started)
+      plot_started <- TRUE
     }
 
     if (precip == 1) {
-      lines(simResults$time, yData_precip, type="l", lwd=2, col = "red")
+      plot_simulated_profile(simResults, yData_precip, xRange_hrs, yRange, logScale, num_ind, col = "red", add = plot_started)
+      plot_started <- TRUE
+    }
+    
+    if (!plot_started) {
+      log_arg <- if (isTRUE(logScale)) "y" else ""
+      plot(0, type = "n", xlim = xRange_hrs, ylim = yRange, ann = FALSE, axes = FALSE, log = log_arg)
     }
 #     
 # 
@@ -269,10 +440,11 @@ panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_
     axis(side=2, las=1, cex.axis=1.4)
     box()
 
-    legendLabels = c("Simulated", "In Solution", "Unbound", "Protein Bound", "In Suspension")
-    legendCol     = c("black", "blue", "orange", "green", "red")
-    lineType     = c(1, 1, 1, 1, 1)
-    pointType     = c(NA)
+    simLegend <- simulated_profile_legend(num_ind)
+    legendLabels = c(simLegend$labels, "In Solution", "Unbound", "Protein Bound", "In Suspension")
+    legendCol     = c(simLegend$col, "blue", "orange", "green", "red")
+    lineType     = c(simLegend$lty, 1, 1, 1, 1)
+    pointType     = c(simLegend$pch, NA, NA, NA, NA)
     
     # Plot CHIC COC data
     if (CHIC_COC==1) {
@@ -304,6 +476,13 @@ panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_
     #   pointType     = c(pointType, NA)
     # }
 
+    userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                         errorBars = TRUE, logScale = logScale)
+    legendLabels <- userLegend$labels
+    legendCol <- userLegend$col
+    lineType <- userLegend$lty
+    pointType <- userLegend$pch
+    
     mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
     mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
     
@@ -314,7 +493,7 @@ panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_
     par(xpd=TRUE)
     #plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
     
-    legend("top", inset=c(0,-0.2), legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=5)
+    legend("top", inset=c(0,-0.2), legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=5, x.intersp=0.7, seg.len=1.4)
     
     #dev.set(p)
     
@@ -325,7 +504,7 @@ panelPlots_C_totLUMEN = function(simResults, yData_total, yData_solution, yData_
 ################ Vagninal Stroma and  Epithelium ######################
 
 panelPlots_C_tissue = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                               xmin, xmax, ymin, ymax, num_ind)
+                               xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
     #options(scipen = 999)
     
@@ -339,38 +518,25 @@ panelPlots_C_tissue = function(simResults, yData, xLabel, yLabel, CMT, logScale,
     xRange_hrs = range(xmin, xmax)
     yRange=range(max(ymin,1e-12), ymax)
     
-    if(num_ind > 1) {
-      if(logScale == FALSE) {
-        plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-        for (i in 2:max(simResults$ID)){
-          a<-(i-1)*(length(yData)/max(simResults$ID))+1
-          b<-i*(length(yData)/max(simResults$ID))
-          lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-        }
-      }
-      if(logScale == TRUE) {
-        plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      }
-    } else
-    {
-      if(logScale == 0) {
-        plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      }
-      if(logScale == 1) {
-        plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-        
-      }
-    }
+    plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
     
     axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
     axis(side=2, las=1, cex.axis=1.4)
     box()
     
-    legendLabels = c("Simulated")
-    legendCol     = c("black")
-    lineType     = c(1)
-    pointType     = c(NA)
+    simLegend <- simulated_profile_legend(num_ind)
+    legendLabels = simLegend$labels
+    legendCol     = simLegend$col
+    lineType     = simLegend$lty
+    pointType     = simLegend$pch
 
+    userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                         errorBars = TRUE, logScale = logScale)
+    legendLabels <- userLegend$labels
+    legendCol <- userLegend$col
+    lineType <- userLegend$lty
+    pointType <- userLegend$pch
+    
     mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
     mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
     
@@ -379,7 +545,7 @@ panelPlots_C_tissue = function(simResults, yData, xLabel, yLabel, CMT, logScale,
     par(mar = c(0, 0, 0, 0))
     plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
     
-    legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=6)
+    legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=6, x.intersp=0.7, seg.len=1.4)
     
     options(scipen = 0)
     
@@ -388,7 +554,7 @@ panelPlots_C_tissue = function(simResults, yData, xLabel, yLabel, CMT, logScale,
 
 ###################### Venous Plasma ###############################
 
-panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, selector, errorBars, xmin, xmax, ymin, ymax, num_ind)
+panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, selector, errorBars, xmin, xmax, ymin, ymax, num_ind, user_obs = NULL, fitRange = TRUE)
 {
     #options(scipen = 999)
     
@@ -399,18 +565,71 @@ panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, s
     #plotColour = c("darkorange", "deepskyblue", "firebrick", "purple", "forest green")
     plotColour = hcl.colors(30, palette = "Viridis")
     
+    if (is.null(selector)) {
+      selector <- character(0)
+    }
     
-
-    allYdata = c(yData, CHIC_plasma$plasma_conc*1e-6, Tremblay_2001_A$`Mean (ng/mL)`/1000, Tremblay_2001_B$`Mean (ng/mL)`/1000, Tremblay_2001_C$`Mean (ng/mL)`/1000,
-                 He_1990_HU$Mean/1000, He_1990_CN$Mean/1000, Kook_2002$`Conc (ng/mL)`/1000, Landgren_1989$`Conc (ng/mL)`/1000,
-                 Johansson_2002_A$`Conc (ng/mL)`/1000, Johansson_2002_B$`Conc (ng/mL)`/1000, Johansson_2002_C$`Conc (ng/mL)`/1000,
-                 Mirena_FDA$Plas_mean_ng_L*1e-6, Kyleena_FDA$Plas_mean_ng_L*1e-6, Skyla_FDA_1$Plas_mean_ng_L*1e-6, Skyla_FDA_2$Plas_mean_ng_L*1e-6,
-                 Nilsson_1982_IUD$Plas_upper*1e-6, Nilsson_1982_oral$Plas_upper*1e-6,
-                 Devoto_oral$Upper, Devoto_vaginal$Upper,Landgren_CI$Upper_ng_mL/1000)
+    selected_obs_x <- c()
+    selected_obs_y <- c()
+    add_selected_obs <- function(dataset_id, x_values, y_values) {
+      if (dataset_id %in% selector) {
+        selected_obs_x <<- c(selected_obs_x, x_values)
+        selected_obs_y <<- c(selected_obs_y, y_values)
+      }
+    }
+    
+    add_selected_obs("CHIC_COC", CHIC_plasma_COC$time_days, CHIC_plasma_COC$plasma_conc * 1e-6)
+    add_selected_obs("CHIC_IUD", CHIC_plasma_IUD$time_days, CHIC_plasma_IUD$plasma_conc * 1e-6)
+    add_selected_obs("Tremblay_A", Tremblay_2001_A$`Time (h)` / 24,
+                     c(Tremblay_2001_A$lower, Tremblay_2001_A$`Mean (ng/mL)`, Tremblay_2001_A$upper) / 1000)
+    add_selected_obs("Tremblay_B", Tremblay_2001_B$`Time (h)` / 24,
+                     c(Tremblay_2001_B$lower, Tremblay_2001_B$`Mean (ng/mL)`, Tremblay_2001_B$upper) / 1000)
+    add_selected_obs("Tremblay_C", Tremblay_2001_C$`Time (h)` / 24,
+                     c(Tremblay_2001_C$lower, Tremblay_2001_C$`Mean (ng/mL)`, Tremblay_2001_C$upper) / 1000)
+    add_selected_obs("He_HU", He_1990_HU$`TSFD (h)` / 24,
+                     c(He_1990_HU$lower, He_1990_HU$Mean, He_1990_HU$upper) / 1000)
+    add_selected_obs("He_CN", He_1990_CN$`TSFD (h)` / 24,
+                     c(He_1990_CN$lower, He_1990_CN$Mean, He_1990_CN$upper) / 1000)
+    add_selected_obs("Kook", Kook_error$Time_h / 24,
+                     c(Kook_error$lower, Kook_error$Mean_ng_mL, Kook_error$upper) / 1000)
+    add_selected_obs("Landgren", Landgren_CI$Time_h / 24,
+                     c(Landgren_CI$Lower_ng_mL, Landgren_CI$Mean_ng_mL, Landgren_CI$Upper_ng_mL) / 1000)
+    add_selected_obs("Johansson_A", Johansson_2002_A$`Dig Time (h)` / 24, Johansson_2002_A$`Conc (ng/mL)` / 1000)
+    add_selected_obs("Johansson_B", Johansson_2002_B$`Dig Time (h)` / 24, Johansson_2002_B$`Conc (ng/mL)` / 1000)
+    add_selected_obs("Johansson_C", Johansson_2002_C$`Dig Time (h)` / 24, Johansson_2002_C$`Conc (ng/mL)` / 1000)
+    add_selected_obs("FDA_Mirena", Mirena_FDA$Time_days,
+                     c(Mirena_FDA$lower, Mirena_FDA$Plas_mean_ng_L, Mirena_FDA$upper) * 1e-6)
+    add_selected_obs("FDA_Kyleena", Kyleena_FDA$Time_days,
+                     c(Kyleena_FDA$lower, Kyleena_FDA$Plas_mean_ng_L, Kyleena_FDA$upper) * 1e-6)
+    add_selected_obs("FDA_Skyla_1", Skyla_FDA_1$Time_days,
+                     c(Skyla_FDA_1$lower, Skyla_FDA_1$Plas_mean_ng_L, Skyla_FDA_1$upper) * 1e-6)
+    add_selected_obs("FDA_Skyla_2", Skyla_FDA_2$Time_days,
+                     c(Skyla_FDA_2$lower, Skyla_FDA_2$Plas_mean_ng_L, Skyla_FDA_2$upper) * 1e-6)
+    add_selected_obs("Nilsson_IUD", Nilsson_1982_IUD$Time_days,
+                     c(Nilsson_1982_IUD$Plas_lower, Nilsson_1982_IUD$Plas_mean_ng_L, Nilsson_1982_IUD$Plas_upper) * 1e-6)
+    add_selected_obs("Nilsson_Oral", Nilsson_1982_oral$Time_days,
+                     c(Nilsson_1982_oral$Plas_lower, Nilsson_1982_oral$Plas_mean_ng_L, Nilsson_1982_oral$Plas_upper) * 1e-6)
+    add_selected_obs("Devoto_Oral", Devoto_oral$Time / 24,
+                     c(Devoto_oral$Lower, Devoto_oral$Mean, Devoto_oral$Upper))
+    add_selected_obs("Devoto_Vaginal", Devoto_vaginal$Time / 24,
+                     c(Devoto_vaginal$Lower, Devoto_vaginal$Mean, Devoto_vaginal$Upper))
     
     #xRange_hrs = range(0, max(simResults$time))
     # Range is actually in Days, not hours
-    xRange_hrs = range(xmin, xmax)
+    if (isTRUE(fitRange)) {
+      plot_ranges <- range_with_plot_observations(
+        xmin, xmax, ymin, ymax,
+        obs_x = selected_obs_x,
+        obs_y = selected_obs_y,
+        user_obs = user_obs,
+        logScale = logScale
+      )
+      xRange_hrs <- plot_ranges$x
+      yRange <- plot_ranges$y
+    } else {
+      xRange_hrs = range(xmin, xmax)
+      yRange=range(max(ymin,1e-12), ymax)
+    }
     
     # if(logScale==0) {
     #     yRange = range(0, max(allYdata, na.rm = TRUE))
@@ -422,47 +641,7 @@ panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, s
     # 
     # }
     
-    yRange=range(max(ymin,1e-12), ymax)
-    yData_summary <- simResults %>% group_by(ID)
-    
-    if(num_ind > 1) {
-      yData_summary <- simResults %>%
-        group_by(time) %>%
-        summarize(
-          med = median(simResults$VEINS),
-          upper = quantile(simResults$VEINS, 0.95),
-          lower = quantile(simResults$VEINS, 0.05)
-        )
-
-      if(logScale == FALSE) {
-        plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-        for (i in 2:max(simResults$ID)){
-          a<-(i-1)*(length(yData)/max(simResults$ID))+1
-          b<-i*(length(yData)/max(simResults$ID))
-          lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-        }
-        # lines(simResults$time, yData_summary$med, lty=2, lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, col="red")
-        #lines(yData_summary$time, yData_summary$upper, lty="dashed", lwd=2, col="red")
-        #lines(yData_summary$time, yData_summary$lower, lty="dashed", lwd=2, col="red")
-        #polygon(c(0,simResults$time),rev(c(0,simResults$time)), c(yData_summary$upper, rev(yData_summary$lower)), col = "grey" )
-      }
-      if(logScale == TRUE) {
-        plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-        #lines(simResults$time, yData_summary$med, lty=2, lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, col="red")
-        #lines(yData_summary$time, yData_summary$upper, lty="dashed", lwd=2, col="red")
-        #lines(yData_summary$time, yData_summary$lower, lty="dashed", lwd=2, col="red")
-        #polygon(c(0,simResults$time),rev(c(0,simResults$time)), c(yData_summary$upper, rev(yData_summary$lower)), col = "grey" )
-      }
-    } else
-      {
-      if(logScale == 0) {
-        plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      }
-      if(logScale == 1) {
-        plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-
-      }
-    }
+    plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
     
     
     
@@ -471,10 +650,11 @@ panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, s
     box()
 
 
-    legendLabels = c("Simulated")
-    legendCol     = c("black")
-    lineType     = c(1)
-    pointType     = c(NA)
+    simLegend <- simulated_profile_legend(num_ind)
+    legendLabels = simLegend$labels
+    legendCol     = simLegend$col
+    lineType     = simLegend$lty
+    pointType     = simLegend$pch
     
     # Plot CHIC COC data
     if ("CHIC_COC" %in% selector) {
@@ -752,6 +932,13 @@ panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, s
       pointType     = c(pointType, NA)
     }
     
+    userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                         errorBars = TRUE, logScale = logScale)
+    legendLabels <- userLegend$labels
+    legendCol <- userLegend$col
+    lineType <- userLegend$lty
+    pointType <- userLegend$pch
+    
     mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
     mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
     
@@ -760,7 +947,7 @@ panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, s
     par(mar = c(0, 0, 0, 0))
     plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
     
-    legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+    legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
     
     options(scipen = 0)
 }
@@ -768,7 +955,7 @@ panelPlots_plasma = function(simResults, yData, xLabel, yLabel, CMT, logScale, s
 ################### Cervical Fluid #############################
 
 panelPlots_CF = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                         num_ind, xmin, xmax, ymin, ymax)
+                         num_ind, xmin, xmax, ymin, ymax, user_obs = NULL)
 {
   #options(scipen = 999)
   
@@ -787,38 +974,25 @@ panelPlots_CF = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   yRange=range(max(ymin,1e-12), ymax)
   
   
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
-  }
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
+  
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
   
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
@@ -827,7 +1001,7 @@ panelPlots_CF = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -835,7 +1009,7 @@ panelPlots_CF = function(simResults, yData, xLabel, yLabel, CMT, logScale,
 ################### Cervical Epithelium ########################
 
 panelPlots_C_Epi = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                            xmin, xmax, ymin, ymax, num_ind)
+                            xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
   #options(scipen = 999)
   
@@ -854,38 +1028,25 @@ panelPlots_C_Epi = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   yRange=range(max(ymin,1e-12), ymax)
   
   
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
-  }
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
+  
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
   
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
@@ -894,7 +1055,7 @@ panelPlots_C_Epi = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -902,7 +1063,7 @@ panelPlots_C_Epi = function(simResults, yData, xLabel, yLabel, CMT, logScale,
 ################### Cervical Myometrium ########################
 
 panelPlots_C_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                            xmin, xmax, ymin, ymax, num_ind)
+                            xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
   #options(scipen = 999)
   
@@ -920,37 +1081,24 @@ panelPlots_C_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   xRange_hrs = range(xmin, xmax)
   yRange=range(max(ymin,1e-12), ymax)
   
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
-  }
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
+  
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
   
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
@@ -959,7 +1107,7 @@ panelPlots_C_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -967,7 +1115,7 @@ panelPlots_C_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale,
 
 ################### Uterine Fluid ##############################
 
-panelPlots_UF = function(simResults, yData, xLabel, yLabel, CMT, logScale, xmin, xmax, ymin, ymax, num_ind)
+panelPlots_UF = function(simResults, yData, xLabel, yLabel, CMT, logScale, xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
   #options(scipen = 999)
   
@@ -986,37 +1134,24 @@ panelPlots_UF = function(simResults, yData, xLabel, yLabel, CMT, logScale, xmin,
   #xRange_hrs = range(0, max(simResults$time))
   xRange_hrs = range(0, xmax)
   
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
-  }
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
+  
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
   
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
@@ -1025,7 +1160,7 @@ panelPlots_UF = function(simResults, yData, xLabel, yLabel, CMT, logScale, xmin,
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -1035,7 +1170,7 @@ panelPlots_UF = function(simResults, yData, xLabel, yLabel, CMT, logScale, xmin,
 
 panelPlots_U_Endo = function(simResults, yData, xLabel, yLabel, CMT, logScale, errorBars, Nilsson_IUD, Nilsson_Oral,
                              Devoto_Oral, Devoto_Vaginal,
-                             xmin, xmax, ymin, ymax, num_ind)
+                             xmin, xmax, ymin, ymax, num_ind, user_obs = NULL, fitRange = TRUE)
 {
   #options(scipen = 999)
   
@@ -1047,44 +1182,65 @@ panelPlots_U_Endo = function(simResults, yData, xLabel, yLabel, CMT, logScale, e
                  "burlywood3", "burlywood4", "coral", "coral3", "darkkhaki", "darkolivegreen", "darkseagreen", "deeppink3", "darkorchid4", "darkslategray4", 
                  "darkslateblue", "red")
   
-  allYdata = c(yData, Nilsson_1982_IUD$Endo_upper*1e-3, Nilsson_1982_oral$Endo_upper*1e-3)#,
-               #Devoto_endo_oral$Oral_upper, Devoto_endo_vaginal$Vag_upper)
+  selected_obs_x <- c()
+  selected_obs_y <- c()
+  
+  if (Nilsson_IUD == 1) {
+    selected_obs_x <- c(selected_obs_x, Nilsson_1982_IUD$Time_days)
+    selected_obs_y <- c(selected_obs_y,
+                        Nilsson_1982_IUD$Endo_lower * 1e-3,
+                        Nilsson_1982_IUD$Endo_mean_ng_g * 1e-3,
+                        Nilsson_1982_IUD$Endo_upper * 1e-3)
+  }
+  if (Nilsson_Oral == 1) {
+    selected_obs_x <- c(selected_obs_x, Nilsson_1982_oral$Time_days)
+    selected_obs_y <- c(selected_obs_y,
+                        Nilsson_1982_oral$Endo_lower * 1e-3,
+                        Nilsson_1982_oral$Endo_mean_ng_g * 1e-3,
+                        Nilsson_1982_oral$Endo_upper * 1e-3)
+  }
+  if (Devoto_Oral == 1) {
+    selected_obs_x <- c(selected_obs_x, Devoto_endo_oral$Time_h / 24)
+    selected_obs_y <- c(selected_obs_y,
+                        Devoto_endo_oral$Oral_lower / 1e6,
+                        Devoto_endo_oral$Oral_mean / 1e6,
+                        Devoto_endo_oral$Oral_upper / 1e6)
+  }
+  if (Devoto_Vaginal == 1) {
+    selected_obs_x <- c(selected_obs_x, Devoto_endo_vaginal$Time_h / 24)
+    selected_obs_y <- c(selected_obs_y,
+                        Devoto_endo_vaginal$Vag_lower / 1e6,
+                        Devoto_endo_vaginal$Vag_mean / 1e6,
+                        Devoto_endo_vaginal$Vag_upper / 1e6)
+  }
   
   #xRange_hrs = range(0, max(simResults$time))
-  xRange_hrs = range(xmin, xmax)
-  yRange=range(max(ymin,1e-12), ymax)
-  
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
+  if (isTRUE(fitRange)) {
+    plot_ranges <- range_with_plot_observations(
+      xmin, xmax, ymin, ymax,
+      obs_x = selected_obs_x,
+      obs_y = selected_obs_y,
+      user_obs = user_obs,
+      logScale = logScale
+    )
+    xRange_hrs <- plot_ranges$x
+    yRange <- plot_ranges$y
+  } else {
+    xRange_hrs = range(xmin, xmax)
+    yRange=range(max(ymin,1e-12), ymax)
   }
+  
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
   
   
   ## Note: Nilsson data is ng/g of wet tissue. Currently assuming wet tissue density of 1 g/mL
@@ -1104,10 +1260,10 @@ panelPlots_U_Endo = function(simResults, yData, xLabel, yLabel, CMT, logScale, e
   # Plot Nilsson Oral data
   if (Nilsson_Oral==1) {
     points(Nilsson_1982_oral$Time_days, Nilsson_1982_oral$Endo_mean_ng_g*1e-3, col=plotColour[2], pch=0, lwd=2)
-    # if (errorBars) {
-    #   arrows(x0=Nilsson_1982_oral$Time_days, y0=Nilsson_1982_oral$Endo_lower*1e-3, x1=Nilsson_1982_oral$Time_days, y1=Nilsson_1982_oral$Endo_upper*1e-3,
-    #          code=3, angle=90, length=0.05, col=plotColour[2], lwd=1)
-    # }
+    if (errorBars) {
+      arrows(x0=Nilsson_1982_oral$Time_days, y0=Nilsson_1982_oral$Endo_lower*1e-3, x1=Nilsson_1982_oral$Time_days, y1=Nilsson_1982_oral$Endo_upper*1e-3,
+             code=3, angle=90, length=0.05, col=plotColour[2], lwd=1)
+    }
     legendLabels = c(legendLabels, "Nilsson Oral")
     legendCol     = c(legendCol, plotColour[2])
     lineType     = c(lineType, 1)
@@ -1142,6 +1298,13 @@ panelPlots_U_Endo = function(simResults, yData, xLabel, yLabel, CMT, logScale, e
   }
   
   
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
+  
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
   
@@ -1149,7 +1312,7 @@ panelPlots_U_Endo = function(simResults, yData, xLabel, yLabel, CMT, logScale, e
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -1158,7 +1321,7 @@ panelPlots_U_Endo = function(simResults, yData, xLabel, yLabel, CMT, logScale, e
 ################### Uterine Myometrium #########################
 
 panelPlots_U_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale, errorBars, Nilsson_IUD, Nilsson_Oral,
-                            xmin, xmax, ymin, ymax, num_ind)
+                            xmin, xmax, ymin, ymax, num_ind, user_obs = NULL, fitRange = TRUE)
 {
   #options(scipen = 999)
   
@@ -1170,43 +1333,51 @@ panelPlots_U_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale, er
                  "burlywood3", "burlywood4", "coral", "coral3", "darkkhaki", "darkolivegreen", "darkseagreen", "deeppink3", "darkorchid4", "darkslategray4", 
                  "darkslateblue", "red")
   
-  allYdata = c(yData, Nilsson_1982_IUD$Myo_mean_ng_g*1e-3, Nilsson_1982_oral$Myo_mean_ng_g*1e-3)
+  selected_obs_x <- c()
+  selected_obs_y <- c()
+  
+  if (Nilsson_IUD == 1) {
+    selected_obs_x <- c(selected_obs_x, Nilsson_1982_IUD$Time_days)
+    selected_obs_y <- c(selected_obs_y,
+                        Nilsson_1982_IUD$Myo_lower * 1e-3,
+                        Nilsson_1982_IUD$Myo_mean_ng_g * 1e-3,
+                        Nilsson_1982_IUD$Myo_upper * 1e-3)
+  }
+  if (Nilsson_Oral == 1) {
+    selected_obs_x <- c(selected_obs_x, Nilsson_1982_oral$Time_days)
+    selected_obs_y <- c(selected_obs_y,
+                        Nilsson_1982_oral$Myo_lower * 1e-3,
+                        Nilsson_1982_oral$Myo_mean_ng_g * 1e-3,
+                        Nilsson_1982_oral$Myo_upper * 1e-3)
+  }
   
   #xRange_hrs = range(0, max(simResults$time))
-  xRange_hrs = range(xmin, xmax)
-  yRange=range(max(ymin,1e-12), ymax)
-  
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
+  if (isTRUE(fitRange)) {
+    plot_ranges <- range_with_plot_observations(
+      xmin, xmax, ymin, ymax,
+      obs_x = selected_obs_x,
+      obs_y = selected_obs_y,
+      user_obs = user_obs,
+      logScale = logScale
+    )
+    xRange_hrs <- plot_ranges$x
+    yRange <- plot_ranges$y
+  } else {
+    xRange_hrs = range(xmin, xmax)
+    yRange=range(max(ymin,1e-12), ymax)
   }
+  
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
   
   ## Note: Nilsson data is ng/g of wet tissue. Currently assuming wet tissue density of 1 g/mL
   # Plot Nilsson IUD data
@@ -1235,6 +1406,13 @@ panelPlots_U_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale, er
     pointType     = c(pointType, NA)
   }
   
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
+  
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
   
@@ -1242,7 +1420,7 @@ panelPlots_U_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale, er
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -1251,7 +1429,7 @@ panelPlots_U_Myo = function(simResults, yData, xLabel, yLabel, CMT, logScale, er
 ################### Stroma Blood ###############################
 
 panelPlots_stroma_blood = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                                   xmin, xmax, ymin, ymax, num_ind)
+                                   xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
   #options(scipen = 999)
   
@@ -1269,37 +1447,24 @@ panelPlots_stroma_blood = function(simResults, yData, xLabel, yLabel, CMT, logSc
   xRange_hrs = range(xmin, xmax)
   yRange=range(max(ymin,1e-12), ymax)
   
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
-  }
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
+  
+  userLegend <- plot_user_observations(user_obs, legendLabels, legendCol, lineType, pointType,
+                                       errorBars = TRUE, logScale = logScale)
+  legendLabels <- userLegend$labels
+  legendCol <- userLegend$col
+  lineType <- userLegend$lty
+  pointType <- userLegend$pch
   
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
@@ -1308,7 +1473,7 @@ panelPlots_stroma_blood = function(simResults, yData, xLabel, yLabel, CMT, logSc
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -1317,7 +1482,7 @@ panelPlots_stroma_blood = function(simResults, yData, xLabel, yLabel, CMT, logSc
 ################### Depot Compartment ###############################
 
 panelPlots_depot = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                            xmin, xmax, ymin, ymax, num_ind)
+                            xmin, xmax, ymin, ymax, num_ind, user_obs = NULL)
 {
   #options(scipen = 999)
   
@@ -1335,37 +1500,17 @@ panelPlots_depot = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   xRange_hrs = range(xmin, xmax)
   yRange=range(max(ymin,1e-12), ymax)
   
-  if(num_ind > 1) {
-    if(logScale == FALSE) {
-      plot(simResults$time[simResults$ID==1], yData[1:(length(yData)/max(simResults$ID))], type="l",  lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-      for (i in 2:max(simResults$ID)){
-        a<-(i-1)*(length(yData)/max(simResults$ID))+1
-        b<-i*(length(yData)/max(simResults$ID))
-        lines(simResults$time[simResults$ID==i], yData[a:b],lwd=2)
-      }
-    }
-    if(logScale == TRUE) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-    }
-  } else
-  {
-    if(logScale == 0) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE)
-    }
-    if(logScale == 1) {
-      plot(simResults$time, yData, type="l", lwd=2, xlim=xRange_hrs, ylim=yRange, ann=FALSE, axes=FALSE, log="y")
-      
-    }
-  }
+  plot_simulated_profile(simResults, yData, xRange_hrs, yRange, logScale, num_ind)
   axis(side=1, cex.axis=1.4, mgp=c(1, 2, 0))
   axis(side=2, las=1, cex.axis=1.4)
   box()
   
   
-  legendLabels = c("Simulated")
-  legendCol     = c("black")
-  lineType     = c(1)
-  pointType     = c(NA)
+  simLegend <- simulated_profile_legend(num_ind)
+  legendLabels = simLegend$labels
+  legendCol     = simLegend$col
+  lineType     = simLegend$lty
+  pointType     = simLegend$pch
   
   mtext(side=1, xLabel, line=4, adj=0.4, cex=1.5, outer=FALSE)
   mtext(side=2, yLabel, line=7, cex=1.5, outer=FALSE)
@@ -1374,7 +1519,7 @@ panelPlots_depot = function(simResults, yData, xLabel, yLabel, CMT, logScale,
   par(mar = c(0, 0, 0, 0))
   plot( c(0,1), c(0,1), type ="l", pch=19, col="transparent", lwd=2, ann=FALSE, axes=FALSE)
   
-  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4)
+  legend("center", legendLabels, col= legendCol, lty=lineType, pch=pointType, lwd=2, cex=1, ncol=4, x.intersp=0.7, seg.len=1.4)
   
   options(scipen = 0)
 }
@@ -1382,7 +1527,7 @@ panelPlots_depot = function(simResults, yData, xLabel, yLabel, CMT, logScale,
 ################### Mass Balance Check #############################
 
 panelPlots_MB = function(simResults, yData, xLabel, yLabel, CMT, logScale,
-                         xmin, xmax, ymin, ymax)
+                         xmin, xmax, ymin, ymax, user_obs = NULL)
 {
   #options(scipen = 999)
   

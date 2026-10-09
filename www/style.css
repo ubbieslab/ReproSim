@@ -24,13 +24,24 @@
 }
 
 .output-container {
-  position:fixed;
+    position: fixed;
     padding-top: 10px;
-    width: 60%;
+    left: 37%;
+    right: 2%;
+    width: auto;
     text-align: center;
     display: inline-block;
     vertical-align: top;
 
+}
+
+.output-container .tab-content {
+    text-align: center;
+}
+
+.output-container .shiny-plot-output {
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .panel-group .panel {
@@ -54,6 +65,18 @@
     display: inline-block;
     color: black;
     padding: 0;
+}
+
+.population-var-group {
+    width: 100%;
+    clear: both;
+}
+
+.population-var-label {
+    width: 100%;
+    margin-bottom: 4px;
+    font-weight: bold;
+    color: black;
 }
 
 .third {
@@ -95,4 +118,123 @@ hr {
 
 .body-container {
     padding-top: 60px;
+}
+
+.params-stack {
+    padding: 0 4px;
+}
+
+.simulation-action-bar {
+    position: sticky;
+    top: 70px;
+    z-index: 900;
+    margin-bottom: 14px;
+    padding: 10px;
+    background: #ffffff;
+    border: 1px solid #ddd;
+    border-left: 5px solid #337ab7;
+    border-radius: 3px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.action-button-half {
+    display: inline-block;
+    width: 48%;
+    vertical-align: top;
+}
+
+.simulation-action-bar .btn {
+    width: 95%;
+    font-weight: 700;
+}
+
+.simulation-action-bar .btn-primary {
+    background-color: #337ab7;
+    border-color: #2e6da4;
+}
+
+.report-button-row {
+    margin-top: 8px;
+}
+
+.report-button-row .btn {
+    width: 98%;
+    font-weight: 700;
+}
+
+.param-block {
+    margin-bottom: 14px;
+}
+
+.block-header {
+    font-family: Times, serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 6px 0 6px 4px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.block-vignettes .block-header {
+    color: #c2185b;
+    border-left: 5px solid #c2185b;
+    padding-left: 8px;
+}
+
+.block-dosing .block-header {
+    color: #1976d2;
+    border-left: 5px solid #1976d2;
+    padding-left: 8px;
+}
+
+.block-drug .block-header {
+    color: #388e3c;
+    border-left: 5px solid #388e3c;
+    padding-left: 8px;
+}
+
+.block-sim .block-header {
+    color: #ff8f00;
+    border-left: 5px solid #ff8f00;
+    padding-left: 8px;
+}
+
+.block-vignettes .panel {
+    border-left: 5px solid #c2185b;
+}
+
+.block-dosing .panel {
+    border-left: 5px solid #1976d2;
+}
+
+.block-drug .panel {
+    border-left: 5px solid #388e3c;
+}
+
+.block-sim .panel {
+    border-left: 5px solid #ff8f00;
+}
+
+.block-vignettes .panel-heading {
+    background: #fce4ec !important;
+}
+
+.block-dosing .panel-heading {
+    background: #e3f2fd !important;
+}
+
+.block-drug .panel-heading {
+    background: #e8f5e9 !important;
+}
+
+.block-sim .panel-heading {
+    background: #fff8e1 !important;
+}
+
+.block-vignettes .panel-title a,
+.block-dosing .panel-title a,
+.block-drug .panel-title a,
+.block-sim .panel-title a {
+    color: #222;
+    font-weight: 600;
 }
